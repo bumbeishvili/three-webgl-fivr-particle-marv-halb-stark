@@ -2,7 +2,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Vertex and fragment shader code
+/**
+ * Shaders
+ * -------
+ * The vertex shader handles particle positioning and animation:
+ * - Calculates staggered animation timing based on noise
+ * - Animates particles from initial positions to target X shape
+ * - Handles particle size based on screen resolution and distance
+ */
 const vertexShader = `
     uniform vec2 uResolution;
     uniform float uSize;
@@ -15,38 +22,60 @@ const vertexShader = `
     ${document.querySelector("#noise").textContent}
 
     void main() {
+        // Generate noise values for staggered animation
         float noiseOrigin = simplexNoise3d(position * 0.2);
         float noiseTarget = simplexNoise3d(aPositionTarget * 0.2);
         float noise = mix(noiseOrigin, noiseTarget, uProgress);
         noise = smoothstep(-1.0, 1.0, noise);
         
+        // Calculate animation timing parameters
         float duration = 0.4;
         float delay = (1.0 - duration) * noise;
         float end = delay + duration;
         
-        // Assembly phase
+        // Calculate assembly progress with staggered timing
         float assemblyProgress = smoothstep(delay, end, uProgress);
         vec3 finalPosition = mix(position, aPositionTarget, assemblyProgress);
 
+        // Standard projection matrix transformations
         vec4 modelPosition = modelMatrix * vec4(finalPosition, 1.0);
         vec4 viewPosition = viewMatrix * modelPosition;
         vec4 projectedPosition = projectionMatrix * viewPosition;
         gl_Position = projectedPosition;
 
+        // Calculate point size with perspective scaling
         gl_PointSize = aSize * uSize * uResolution.y;
         gl_PointSize *= (1.0 / - viewPosition.z);
 
+        // Pass color to fragment shader
         vColor = aColor;
     }
 `;
 
+/**
+ * Fragment shader creates circular particles with the vertex color
+ * Using step function for a hard edge circular shape
+ * With color intensity capped to avoid white highlights
+ */
 const fragmentShader = `
     varying vec3 vColor;
+    
+    // Maximum color value to prevent white highlights from additive blending
+    const vec3 maxColor = vec3(0.267, 0.733, 0.984); // #44bbfb #37FAFF
+    
     void main() {
+        // Calculate distance from center of point sprite
         vec2 uv = gl_PointCoord - 0.5;
         float dist = length(uv);
+        
+        // Create circular shape with sharp edges
         float circle = step(dist, 0.5);
-        gl_FragColor = vec4(vColor, circle);
+        
+        // Clamp the color to the maximum allowed value
+        vec3 clampedColor = min(vColor, maxColor);
+        
+        // Output final color with alpha mask
+        gl_FragColor = vec4(clampedColor, circle);
     }
 `;
 
@@ -59,11 +88,11 @@ const sceneSize = {
   pixelRatio: Math.min(window.devicePixelRatio, 2),
 };
 
-// Add fog
+// Add fog to fade distant particles
 const fogExp2 = new THREE.FogExp2(0x000000, 100);
-scene.fog =fogExp2
+scene.fog = fogExp2;
 
-// Camera
+// Camera setup
 const camera = new THREE.PerspectiveCamera(
   30,
   sceneSize.width / sceneSize.height,
@@ -72,7 +101,7 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(0, 0, 4);
 
-// Renderer
+// Renderer configuration
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
   antialias: true,
@@ -81,7 +110,7 @@ renderer.setSize(sceneSize.width, sceneSize.height);
 renderer.setPixelRatio(sceneSize.pixelRatio);
 renderer.setClearColor("#000000");
 
-// Controls
+// Orbit controls for camera interaction
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.enabled = true;
@@ -96,13 +125,16 @@ controls.zoomSpeed = 1.2;
 controls.target.set(0, 0, 0);
 controls.update();
 
-// Particles
+// Particles system variables
 let particles = null;
-const particlesCount = 2754 * 2;
+const particlesCount = 2754;
 const positions = new Float32Array(particlesCount * 3);
 const particleSizes = new Float32Array(particlesCount);
 
-// Create grid pattern
+/**
+ * Initial particle positions arranged in a grid pattern
+ * Creates a wave-like pattern as starting position before animation
+ */
 const gridSize = Math.ceil(Math.sqrt(particlesCount)); // Calculate grid dimensions
 for (let i = 0; i < particlesCount; i++) {
     const i3 = i * 3;
@@ -114,17 +146,22 @@ for (let i = 0; i < particlesCount; i++) {
     // Convert grid coordinates to world space (-1 to 1 range)
     const x = (col / gridSize - 0.5) * 2;
     const z = (row / gridSize - 0.5) * 10;
-    // Keep the y-coordinate calculation similar but smoother
-    const y = Math.sin(x* Math.PI-Math.PI/2) *0.2+z*0.2;
+    
+    // Add wave effect to y coordinate
+    const y = Math.sin(x * Math.PI - Math.PI/2) * 0.2 + z * 0.2;
 
+    // Store position
     positions[i3] = x;
-    positions[i3 + 1] = y-0.2;
-    positions[i3 + 2] = z+2.7;
+    positions[i3 + 1] = y - 0.2;
+    positions[i3 + 2] = z + 2.7;
 
     particleSizes[i] = 1;
 }
 
-// Load X model
+/**
+ * Load the X model from GLTF file
+ * The vertices from this model will be used as target positions for particles
+ */
 const loader = new GLTFLoader();
 let xShape;
 loader.load("./x.glb", (gltf) => {
@@ -132,11 +169,18 @@ loader.load("./x.glb", (gltf) => {
   initParticles();
 });
 
+/**
+ * Initialize the particle system
+ * - Creates geometry with position, size, and color attributes
+ * - Sets up target positions from the X model
+ * - Configures the shader material
+ */
 function initParticles() {
   const geometry = new THREE.BufferGeometry();
 
   // Get the number of vertices from the X model
   const targetVertexCount = xShape.array.length / 3;
+  console.log({targetVertexCount});
 
   // Adjust particlesCount to match the target vertex count
   const adjustedCount = Math.min(particlesCount, targetVertexCount);
@@ -151,45 +195,47 @@ function initParticles() {
   for (let i = 0; i < adjustedCount; i++) {
     const i3 = i * 3;
 
-    // Copy positions
+    // Copy positions from initial grid setup
     adjustedPositions[i3] = positions[i3];
     adjustedPositions[i3 + 1] = positions[i3 + 1];
     adjustedPositions[i3 + 2] = positions[i3 + 2];
 
-    // Variable particle sizes - larger in the center, smaller at edges
+    // Calculate variable particle sizes - larger in the center, smaller at edges
     const normalizedPos = i / adjustedCount;
     const sizeVariation = Math.sin(normalizedPos * Math.PI); // Creates a curve: small->big->small
     const randomFactor = 0.8 + Math.random() * 0.4; // Random variation between 0.8 and 1.2
-    adjustedSizes[i] = 1 //(0.8 + sizeVariation * 0.4) * randomFactor;
+    adjustedSizes[i] = 1; // Using uniform size for all particles
 
-    // Set colors - create a gradient from light to darker blue
-    const lightBlue = new THREE.Color("#59c1ff");
-    const darkBlue = new THREE.Color("#004080");
+    // Create color gradient from darker to lighter blue
+    const lightBlue = new THREE.Color("#004080");//59c1ff
+    const darkBlue = new THREE.Color("#007fff"); //004080
     const t = i / adjustedCount;
     const color = new THREE.Color().lerpColors(darkBlue, lightBlue, t);
     
+    // Store color components
     colors[i3] = color.r;
     colors[i3 + 1] = color.g;
     colors[i3 + 2] = color.b;
 
-    // Copy target positions directly from the X model with scaling
-    
-    adjustedTargetPositions[i3] = xShape.array[i3] ;
-    adjustedTargetPositions[i3 + 1] = xShape.array[i3 + 1] ;
-    adjustedTargetPositions[i3 + 2] = xShape.array[i3 + 2] ;
+    // Copy target positions directly from the X model
+    adjustedTargetPositions[i3] = xShape.array[i3];
+    adjustedTargetPositions[i3 + 1] = xShape.array[i3 + 1];
+    adjustedTargetPositions[i3 + 2] = xShape.array[i3 + 2];
   }
 
+  // Set geometry attributes
   geometry.setAttribute("position", new THREE.BufferAttribute(adjustedPositions, 3));
   geometry.setAttribute("aPositionTarget", new THREE.BufferAttribute(adjustedTargetPositions, 3));
   geometry.setAttribute("aSize", new THREE.BufferAttribute(adjustedSizes, 1));
   geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
 
+  // Create shader material with uniforms
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
     uniforms: {
-      uSize: { value: 0.015 },
-      uProgress: { value: 0.0 },
+      uSize: { value: 0.015 }, // Base particle size
+      uProgress: { value: 0.0 }, // Animation progress (0-1)
       uResolution: {
         value: new THREE.Vector2(
           sceneSize.width * sceneSize.pixelRatio,
@@ -199,14 +245,19 @@ function initParticles() {
     },
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.AdditiveBlending, // Additive blending for glow effect
   });
 
+  // Create and add points mesh to scene
   particles = new THREE.Points(geometry, material);
+  particles.geometry.setIndex(null)
   scene.add(particles);
 }
 
-// Handle scroll
+/**
+ * Scroll event handler
+ * Updates animation progress based on scroll position
+ */
 let scrollY = window.scrollY;
 let currentSection = 0;
 
@@ -218,53 +269,62 @@ window.addEventListener("scroll", () => {
     currentSection = newSection;
   }
 
-  // Update progress display
+  // Calculate progress percentage (0-100)
   const progress =
     (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) *
     100;
+  
+  // Update progress display in the UI
   document.querySelector(".scrollProgress").textContent = `${Math.round(
     progress
   )}%`;
 
-  // Update particle animation
+  // Update particle animation progress (0-1)
   if (particles) {
     particles.material.uniforms.uProgress.value = progress / 100;
   }
 });
 
-// Animation loop
+/**
+ * Animation loop
+ * Renders the scene on each frame
+ */
 function animate() {
   requestAnimationFrame(animate);
 
-  // Update controls
-
+  // Update orbit controls (handles damping)
   controls.update();
 
-  // Render
+  // Render the scene
   renderer.render(scene, camera);
 }
 
 // Start animation loop
 animate();
 
-// Handle resize
+/**
+ * Window resize handler
+ * Updates all size-dependent variables and objects
+ */
 window.addEventListener("resize", () => {
+  // Update size variables
   sceneSize.width = window.innerWidth;
   sceneSize.height = window.innerHeight;
   sceneSize.pixelRatio = Math.min(window.devicePixelRatio, 2);
 
+  // Update camera aspect ratio
   camera.aspect = sceneSize.width / sceneSize.height;
   camera.updateProjectionMatrix();
 
+  // Update renderer size
   renderer.setSize(sceneSize.width, sceneSize.height);
   renderer.setPixelRatio(sceneSize.pixelRatio);
 
+  // Update particle shader uniforms
   if (particles) {
     particles.material.uniforms.uResolution.value.set(
       sceneSize.width * sceneSize.pixelRatio,
       sceneSize.height * sceneSize.pixelRatio
     );
   }
-
-  // Enable controls only in the first section
 });
