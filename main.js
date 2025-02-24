@@ -41,7 +41,7 @@ const vertexShader = `
         
         // Rotation phase (90-100%)
         float rotationProgress = smoothstep(0.6, 1.0, uProgress);
-        float rotationAngle = rotationProgress * radians(10.0); // 10 degree rotation
+        float rotationAngle = rotationProgress * radians(-10.0); // 10 degree rotation
         
         vec3 finalPosition = assembledPosition;
         if (uProgress > 0.6) {
@@ -80,8 +80,8 @@ const sceneSize = {
 };
 
 // Camera
-const camera = new THREE.PerspectiveCamera(75, sceneSize.width / sceneSize.height, 0.1, 100);
-camera.position.set(0, 0, 1);
+const camera = new THREE.PerspectiveCamera(30, sceneSize.width / sceneSize.height, 0.1, 100);
+camera.position.set(1, 0, 4);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({
@@ -109,7 +109,7 @@ controls.update();
 
 // Particles
 let particles = null;
-const particlesCount = 2754;
+const particlesCount = 2754*2;
 const positions = new Float32Array(particlesCount * 3);
 const particleSizes = new Float32Array(particlesCount);
 
@@ -130,7 +130,7 @@ for (let i = 0; i < particlesCount; i++) {
 // Load X model
 const loader = new GLTFLoader();
 let xShape;
-loader.load('https://bumbeishvili.github.io/three-webgl-fivr-particle-marv-halb-stark/x.glb',
+loader.load('./x.glb',
     (gltf) => {
         xShape = gltf.scene.children[0].geometry.attributes.position;
         initParticles();
@@ -203,6 +203,7 @@ function initParticles() {
         adjustedTargetPositions[i] = x * Math.cos(yAngle) + z1 * Math.sin(yAngle);
         adjustedTargetPositions[i + 1] = y1 - minY;
         adjustedTargetPositions[i + 2] = -x * Math.sin(yAngle) + z1 * Math.cos(yAngle);
+        adjustedTargetPositions[i + 1] -= 0.75
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(adjustedPositions, 3));
@@ -213,14 +214,14 @@ function initParticles() {
         vertexShader,
         fragmentShader,
         uniforms: {
-            uSize: { value: 0.02 },
+            uSize: { value: 0.04 },
             uProgress: { value: 0.0 },
             uResolution: { value: new THREE.Vector2(sceneSize.width * sceneSize.pixelRatio, sceneSize.height * sceneSize.pixelRatio) },
             uColor: { value: new THREE.Color('#0091ff') }
         },
         transparent: true,
         depthWrite: false,
-        //blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending
     });
 
     particles = new THREE.Points(geometry, material);
