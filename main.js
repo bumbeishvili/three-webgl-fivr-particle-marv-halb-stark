@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+// Global configuration
+const waveSpeed = 0.5; // Controls the speed of wave animations (higher = faster)
+
 /**
  * Shaders
  * -------
@@ -14,6 +17,8 @@ const vertexShader = `
     uniform vec2 uResolution;
     uniform float uSize;
     uniform float uProgress;
+    uniform float uTime;
+    uniform float uWaveSpeed;
     attribute vec3 aPositionTarget;
     attribute float aSize;
     attribute vec3 aColor;
@@ -33,9 +38,30 @@ const vertexShader = `
         float delay = (1.0 - duration) * noise;
         float end = delay + duration;
         
+        // Animate initial position with random 45-degree waves based on time
+        vec3 animatedPosition = position;
+        if (uProgress < 0.5) {
+            // Calculate wave factor with smoother fade-out
+            float waveFactor = 1.0 - (uProgress / 0.5);
+            waveFactor = smoothstep(0.0, 1.0, waveFactor);
+            
+            // Create more random and varied wave patterns
+            float timeOffset = position.x * 2.0 + position.z * 2.0; // 45-degree direction
+            float noise1 = simplexNoise3d(vec3(position.xz * 1.5, uTime * 0.2 * uWaveSpeed)) * 0.1;
+            float noise2 = simplexNoise3d(vec3(position.zx * 0.8, uTime * 0.3 * uWaveSpeed + 100.0)) * 0.08;
+            
+            // Create diagonal movement (45 degrees)
+            float diagonalWave = sin(timeOffset + uTime * 1.5 * uWaveSpeed) * 0.04;
+            
+            // Apply the waves in diagonal pattern (45 degrees)
+            //animatedPosition.x += (diagonalWave + noise1) * waveFactor;
+            animatedPosition.y += (noise2 - diagonalWave) * waveFactor;
+            animatedPosition.z += (noise1 + diagonalWave * 0.5) * waveFactor;
+        }
+        
         // Calculate assembly progress with staggered timing
         float assemblyProgress = smoothstep(delay, end, uProgress);
-        vec3 finalPosition = mix(position, aPositionTarget, assemblyProgress);
+        vec3 finalPosition = mix(animatedPosition, aPositionTarget, assemblyProgress);
 
         // Standard projection matrix transformations
         vec4 modelPosition = modelMatrix * vec4(finalPosition, 1.0);
@@ -241,7 +267,9 @@ function initParticles() {
           sceneSize.width * sceneSize.pixelRatio,
           sceneSize.height * sceneSize.pixelRatio
         ),
-      }
+      },
+      uTime: { value: 0.0 },
+      uWaveSpeed: { value: waveSpeed } // Use the global wave speed variable
     },
     transparent: true,
     depthWrite: false,
@@ -291,6 +319,11 @@ window.addEventListener("scroll", () => {
  */
 function animate() {
   requestAnimationFrame(animate);
+
+  // Update time for wave animation
+  if (particles) {
+    particles.material.uniforms.uTime.value += 0.01;
+  }
 
   // Update orbit controls (handles damping)
   controls.update();
