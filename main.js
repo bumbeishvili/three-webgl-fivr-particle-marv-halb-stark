@@ -14,17 +14,6 @@ const vertexShader = `
 
     ${document.querySelector("#noise").textContent}
 
-    mat4 rotationY(float angle) {
-        float s = sin(angle);
-        float c = cos(angle);
-        return mat4(
-            c, 0.0, s, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            s, 0.0, c, 0.0,
-            0.0, 0.0, 0.0, 1.0
-        );
-    }
-
     void main() {
         float noiseOrigin = simplexNoise3d(position * 0.2);
         float noiseTarget = simplexNoise3d(aPositionTarget * 0.2);
@@ -35,18 +24,9 @@ const vertexShader = `
         float delay = (1.0 - duration) * noise;
         float end = delay + duration;
         
-        // Assembly phase (0-90%)
-        float assemblyProgress = smoothstep(delay, end, min(uProgress / 0.9, 1.0));
-        vec3 assembledPosition = mix(position, aPositionTarget, assemblyProgress);
-        
-        // Rotation phase (90-100%)
-        float rotationProgress = smoothstep(0.6, 1.0, uProgress);
-        float rotationAngle = rotationProgress * radians(-10.0);
-        
-        vec3 finalPosition = assembledPosition;
-        if (uProgress > 0.6) {
-            finalPosition = (rotationY(rotationAngle) * vec4(assembledPosition, 1.0)).xyz;
-        }
+        // Assembly phase
+        float assemblyProgress = smoothstep(delay, end, uProgress);
+        vec3 finalPosition = mix(position, aPositionTarget, assemblyProgress);
 
         vec4 modelPosition = modelMatrix * vec4(finalPosition, 1.0);
         vec4 viewPosition = viewMatrix * modelPosition;
@@ -79,6 +59,10 @@ const sceneSize = {
   pixelRatio: Math.min(window.devicePixelRatio, 2),
 };
 
+// Add fog
+const fogExp2 = new THREE.FogExp2(0x000000, 100);
+scene.fog =fogExp2
+
 // Camera
 const camera = new THREE.PerspectiveCamera(
   30,
@@ -86,7 +70,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.set(1, 0, 4);
+camera.position.set(0, 0, 4);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({
@@ -118,18 +102,26 @@ const particlesCount = 2754 * 2;
 const positions = new Float32Array(particlesCount * 3);
 const particleSizes = new Float32Array(particlesCount);
 
-// Create wave shape
+// Create grid pattern
+const gridSize = Math.ceil(Math.sqrt(particlesCount)); // Calculate grid dimensions
 for (let i = 0; i < particlesCount; i++) {
-  const i3 = i * 3;
-  const x = (Math.random() - 0.5) * 2;
-  const y = Math.sin(x * Math.PI) * 0.5;
-  const z = (Math.random() - 0.5) * 0.5;
+    const i3 = i * 3;
+    
+    // Calculate grid positions
+    const row = Math.floor(i / gridSize);
+    const col = i % gridSize;
+    
+    // Convert grid coordinates to world space (-1 to 1 range)
+    const x = (col / gridSize - 0.5) * 2;
+    const z = (row / gridSize - 0.5) * 10;
+    // Keep the y-coordinate calculation similar but smoother
+    const y = Math.sin(x* Math.PI-Math.PI/2) *0.2+z*0.2;
 
-  positions[i3] = x;
-  positions[i3 + 1] = y;
-  positions[i3 + 2] = z;
+    positions[i3] = x;
+    positions[i3 + 1] = y-0.2;
+    positions[i3 + 2] = z+2.7;
 
-  particleSizes[i] = 1;
+    particleSizes[i] = 1;
 }
 
 // Load X model
@@ -153,6 +145,7 @@ function initParticles() {
   const adjustedPositions = new Float32Array(adjustedCount * 3);
   const adjustedSizes = new Float32Array(adjustedCount);
   const colors = new Float32Array(adjustedCount * 3);
+  const adjustedTargetPositions = new Float32Array(adjustedCount * 3);
 
   // Copy data to the adjusted arrays
   for (let i = 0; i < adjustedCount; i++) {
@@ -167,7 +160,7 @@ function initParticles() {
     const normalizedPos = i / adjustedCount;
     const sizeVariation = Math.sin(normalizedPos * Math.PI); // Creates a curve: small->big->small
     const randomFactor = 0.8 + Math.random() * 0.4; // Random variation between 0.8 and 1.2
-    adjustedSizes[i] = (0.8 + sizeVariation * 0.4) * randomFactor;
+    adjustedSizes[i] = 1 //(0.8 + sizeVariation * 0.4) * randomFactor;
 
     // Set colors - create a gradient from light to darker blue
     const lightBlue = new THREE.Color("#59c1ff");
@@ -178,49 +171,12 @@ function initParticles() {
     colors[i3] = color.r;
     colors[i3 + 1] = color.g;
     colors[i3 + 2] = color.b;
-  }
 
-  // Create adjusted and scaled target positions array
-  const adjustedTargetPositions = new Float32Array(adjustedCount * 3);
-  const scale = 0.015;
-
-  // Rotation angles
-  const xAngle = Math.PI / 2; // 90 degrees for vertical rotation
-  const yAngle = -Math.PI / 18; // -10 degrees for initial horizontal rotation
-
-  // First pass: find minimum Y after ALL transformations
-  let minY = Infinity;
-  for (let i = 0; i < adjustedCount * 3; i += 3) {
-    const x = xShape.array[i] * scale;
-    const y = xShape.array[i + 1] * scale;
-    const z = xShape.array[i + 2] * scale;
-
-    // Step 1: vertical rotation (X-axis)
-    const y1 = y * Math.cos(xAngle) - z * Math.sin(xAngle);
-    const z1 = y * Math.sin(xAngle) + z * Math.cos(xAngle);
-
-    // Step 2: horizontal rotation (Y-axis)
-    const x2 = x * Math.cos(yAngle) + z1 * Math.sin(yAngle);
-    const y2 = y1; // Y doesn't change with Y rotation
-
-    minY = Math.min(minY, y2);
-  }
-
-  // Second pass: apply both rotations and offset to Y=0
-  for (let i = 0; i < adjustedCount * 3; i += 3) {
-    const x = xShape.array[i] * scale;
-    const y = xShape.array[i + 1] * scale;
-    const z = xShape.array[i + 2] * scale;
-
-    // Step 1: vertical rotation (X-axis)
-    const y1 = y * Math.cos(xAngle) - z * Math.sin(xAngle);
-    const z1 = y * Math.sin(xAngle) + z * Math.cos(xAngle);
-
-    // Step 2: horizontal rotation (Y-axis) and apply Y offset
-    adjustedTargetPositions[i] = x * Math.cos(yAngle) + z1 * Math.sin(yAngle);
-    adjustedTargetPositions[i + 1] = y1 - minY;
-    adjustedTargetPositions[i + 2] = -x * Math.sin(yAngle) + z1 * Math.cos(yAngle);
-    adjustedTargetPositions[i + 1] -= 0.75;
+    // Copy target positions directly from the X model with scaling
+    
+    adjustedTargetPositions[i3] = xShape.array[i3] ;
+    adjustedTargetPositions[i3 + 1] = xShape.array[i3 + 1] ;
+    adjustedTargetPositions[i3 + 2] = xShape.array[i3 + 2] ;
   }
 
   geometry.setAttribute("position", new THREE.BufferAttribute(adjustedPositions, 3));
@@ -232,7 +188,7 @@ function initParticles() {
     vertexShader,
     fragmentShader,
     uniforms: {
-      uSize: { value: 0.03 },
+      uSize: { value: 0.015 },
       uProgress: { value: 0.0 },
       uResolution: {
         value: new THREE.Vector2(
