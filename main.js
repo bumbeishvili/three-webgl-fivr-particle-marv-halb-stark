@@ -87,15 +87,15 @@ const fragmentShader = `
     varying vec3 vColor;
     
     // Maximum color value to prevent white highlights from additive blending
-    const vec3 maxColor = vec3(0.267, 0.733, 0.984); // #44bbfb #37FAFF
+    const vec3 maxColor = vec3(0.65, 0.9, 1.0); // Higher blue limit for more vibrant particles
     
     void main() {
         // Calculate distance from center of point sprite
         vec2 uv = gl_PointCoord - 0.5;
         float dist = length(uv);
         
-        // Create circular shape with sharp edges
-        float circle = step(dist, 0.5);
+        // Create circular shape with enhanced glow at edges
+        float circle = smoothstep(0.5, 0.35, dist); 
         
         // Clamp the color to the maximum allowed value
         vec3 clampedColor = min(vColor, maxColor);
@@ -226,6 +226,11 @@ function initParticles() {
     adjustedPositions[i3 + 1] = positions[i3 + 1];
     adjustedPositions[i3 + 2] = positions[i3 + 2];
 
+    // First copy target positions from the X model
+    adjustedTargetPositions[i3] = xShape.array[i3];
+    adjustedTargetPositions[i3 + 1] = xShape.array[i3 + 1];
+    adjustedTargetPositions[i3 + 2] = xShape.array[i3 + 2];
+
     // Calculate variable particle sizes - larger in the center, smaller at edges
     const normalizedPos = i / adjustedCount;
     const sizeVariation = Math.sin(normalizedPos * Math.PI); // Creates a curve: small->big->small
@@ -233,20 +238,48 @@ function initParticles() {
     adjustedSizes[i] = 1; // Using uniform size for all particles
 
     // Create color gradient from darker to lighter blue
-    const lightBlue = new THREE.Color("#004080");//59c1ff
-    const darkBlue = new THREE.Color("#007fff"); //004080
-    const t = i / adjustedCount;
-    const color = new THREE.Color().lerpColors(darkBlue, lightBlue, t);
+    // Target X model's center is approximately at (0,0,0)
+    // Calculate distance from center to determine color (edges brighter, center darker)
+    const targetX = adjustedTargetPositions[i3];
+    const targetY = adjustedTargetPositions[i3 + 1];
+    const targetZ = adjustedTargetPositions[i3 + 2];
+    
+    // Calculate distance from center (0,0,0)
+    const distFromCenter = Math.sqrt(targetX * targetX + targetY * targetY + targetZ * targetZ);
+    
+    // Find the farthest distance to normalize against
+    const maxDistance = 1.0;  
+    
+    // Create a different distance metric that emphasizes edges more consistently
+    // This calculation creates a more uniform edge highlighting effect
+    // We want particles on the outer edges of the X to be bright, regardless of absolute distance
+    
+    // Calculate distance from the "skeleton" line of the X - approximate by finding distance to origin plane
+    // This makes points farther from the center line of the X brighter
+    const distFromCenterLine = Math.abs(targetY);
+    
+    // Combine with absolute distance for a more uniform edge highlighting
+    const edgeFactor = Math.max(
+      distFromCenter / maxDistance,
+      distFromCenterLine / 0.3  // Emphasize edges based on distance from central axis
+    );
+    
+    // Apply curve and clamp
+    let normalizedDist = Math.min(edgeFactor, 1.0);
+    normalizedDist = Math.pow(normalizedDist, 0.7); // Adjust power curve
+    
+    // Create color gradient based on distance from center
+    // Outer edges (normalizedDist = 1.0) will be bright blue
+    // Center (normalizedDist = 0.0) will be darker blue
+    const brightBlue = new THREE.Color("#a0e8ff"); // Even brighter blue for edges
+    const darkBlue = new THREE.Color("#0040bb");   // Richer dark blue for center
+    
+    const color = new THREE.Color().lerpColors(darkBlue, brightBlue, normalizedDist);
     
     // Store color components
     colors[i3] = color.r;
     colors[i3 + 1] = color.g;
     colors[i3 + 2] = color.b;
-
-    // Copy target positions directly from the X model
-    adjustedTargetPositions[i3] = xShape.array[i3];
-    adjustedTargetPositions[i3 + 1] = xShape.array[i3 + 1];
-    adjustedTargetPositions[i3 + 2] = xShape.array[i3 + 2];
   }
 
   // Set geometry attributes
@@ -260,7 +293,7 @@ function initParticles() {
     vertexShader,
     fragmentShader,
     uniforms: {
-      uSize: { value: 0.015 }, // Base particle size
+      uSize: { value: 0.023 }, // Further increased particle size for better visibility
       uProgress: { value: 0.0 }, // Animation progress (0-1)
       uResolution: {
         value: new THREE.Vector2(
