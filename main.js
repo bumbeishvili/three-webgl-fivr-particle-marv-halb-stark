@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // Global configuration
@@ -119,79 +118,7 @@ const sceneSize = {
   pixelRatio: Math.min(window.devicePixelRatio, 2),
 };
 
-// Add axis helpers to visualize the coordinate system
-// Red = X axis, Green = Y axis, Blue = Z axis
-const axesHelper = new THREE.AxesHelper(3); // Increased size of the helper lines
-axesHelper.position.set(0, 0, 0); // Ensure it's at the origin
-scene.add(axesHelper);
-
-// Add a grid helper to better understand the ground plane
-const gridHelper = new THREE.GridHelper(5, 20, 0xffffff, 0x888888); // Increased size and brightness
-gridHelper.position.y = -0.5; // Move down slightly to not overlap with axes
-scene.add(gridHelper);
-
-// Add text labels for the axes with improved visibility
-function createTextLabel(text, position, color) {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  canvas.width = 256;
-  canvas.height = 128;
-  
-  // Draw text with better contrast
-  context.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Lighter background
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = '#000000';
-  context.lineWidth = 4;
-  context.strokeRect(0, 0, canvas.width, canvas.height);
-  
-  context.font = 'bold 70px Arial';
-  context.fillStyle = color;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
-  
-  // Create texture
-  const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    alphaTest: 0.1
-  });
-  
-  const sprite = new THREE.Sprite(material);
-  sprite.position.copy(position);
-  sprite.scale.set(1.0, 0.5, 1); // Doubled size for better visibility
-  return sprite;
-}
-
-// Create and add axis labels with increased distance
-const xLabel = createTextLabel('X', new THREE.Vector3(3.5, 0, 0), '#ff0000');
-const yLabel = createTextLabel('Y', new THREE.Vector3(0, 3.5, 0), '#00ff00');
-const zLabel = createTextLabel('Z', new THREE.Vector3(0, 0, 3.5), '#0000ff');
-
-// Add visible, solid arrows to reinforce the axes
-function createArrow(direction, color) {
-  const arrowLength = 3;
-  const headLength = 0.4;
-  const headWidth = 0.3;
-  
-  const dir = new THREE.Vector3().copy(direction).normalize();
-  const origin = new THREE.Vector3(0, 0, 0);
-  
-  const arrow = new THREE.ArrowHelper(dir, origin, arrowLength, color, headLength, headWidth);
-  return arrow;
-}
-
-const xArrow = createArrow(new THREE.Vector3(1, 0, 0), 0xff0000);
-const yArrow = createArrow(new THREE.Vector3(0, 1, 0), 0x00ff00);
-const zArrow = createArrow(new THREE.Vector3(0, 0, 1), 0x0000ff);
-
-scene.add(xArrow);
-scene.add(yArrow);
-scene.add(zArrow);
-scene.add(xLabel);
-scene.add(yLabel);
-scene.add(zLabel);
+// No scene helpers - removed for cleaner visualization
 
 // Add fog to fade distant particles
 const fogExp2 = new THREE.FogExp2(0x000000, 100);
@@ -206,6 +133,8 @@ const camera = new THREE.PerspectiveCamera(
 );
 // Adjust camera position to match the reference images more precisely
 camera.position.set(0.8, 0.2, 3.5);
+// Set camera to look at the origin (0,0,0) - same target point that OrbitControls was using
+camera.lookAt(0, 0, 0);
 
 // Renderer configuration
 const renderer = new THREE.WebGLRenderer({
@@ -215,22 +144,6 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(sceneSize.width, sceneSize.height);
 renderer.setPixelRatio(sceneSize.pixelRatio);
 renderer.setClearColor("#000000");
-
-// Orbit controls for camera interaction
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-controls.enabled = true;
-controls.autoRotate = false; // Disable auto-rotation
-controls.autoRotateSpeed = 0.5;
-controls.enableZoom = true;
-controls.minDistance = 2;
-controls.maxDistance = 10;
-controls.enablePan = true;
-controls.dampingFactor = 0.1;
-controls.rotateSpeed = 1.0;
-controls.zoomSpeed = 1.2;
-controls.target.set(0, 0, 0);
-controls.update();
 
 // Particles system variables
 let particles = null;
@@ -287,7 +200,6 @@ function initParticles() {
 
   // Get the number of vertices from the X model
   const targetVertexCount = xShape.array.length / 3;
-  console.log({targetVertexCount});
 
   // Adjust particlesCount to match the target vertex count
   const adjustedCount = Math.min(particlesCount, targetVertexCount);
@@ -429,15 +341,9 @@ function initParticles() {
  * Updates animation progress based on scroll position
  */
 let scrollY = window.scrollY;
-let currentSection = 0;
 
 window.addEventListener("scroll", () => {
   scrollY = window.scrollY;
-  const newSection = Math.round(scrollY / sceneSize.height);
-
-  if (currentSection !== newSection) {
-    currentSection = newSection;
-  }
 
   // Calculate progress percentage (0-100)
   const progress =
@@ -554,9 +460,6 @@ function animate() {
     
     // No additional rotation logic here - all handled in scroll event
   }
-
-  // Update orbit controls (handles damping)
-  controls.update();
 
   // Render the scene
   renderer.render(scene, camera);
