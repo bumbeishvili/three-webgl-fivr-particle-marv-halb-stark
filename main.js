@@ -34,7 +34,6 @@ const vertexShader = `
         
         // Calculate animation timing parameters
         float duration = 0.4;
-        // Adjust delay to create a more staggered appearance
         float delay = (1.0 - duration) * noise * 1.2; // Slightly extended delay range for more staggering
         float end = delay + duration;
         
@@ -54,7 +53,6 @@ const vertexShader = `
             float diagonalWave = sin(timeOffset + uTime * 1.5 * uWaveSpeed) * 0.04;
             
             // Apply the waves in diagonal pattern (45 degrees)
-            // animatedPosition.x += (diagonalWave + noise1) * waveFactor;
             animatedPosition.y += (noise2 - diagonalWave) * waveFactor;
             animatedPosition.z += (noise1 + diagonalWave * 0.5) * waveFactor;
         }
@@ -402,7 +400,7 @@ window.addEventListener("scroll", () => {
   const scrollPercentage = Math.round(progress);
   document.querySelector(".scrollProgress").textContent = `${scrollPercentage}%`;
   
-  // Update debug info with more precise percentage including decimal point
+  // Update debug info with more precise percentage (avoid redundant calculation)
   const scrollProgressPrecise = progress.toFixed(1);
   document.querySelector(".scrollProgressPrecise").textContent = 
     `Scroll: ${scrollProgressPrecise}% | Rotation: ${progress >= 20 ? 'active' : 'inactive'}`;
@@ -419,16 +417,12 @@ window.addEventListener("scroll", () => {
       // Normalize progress to 0-1 range for the whole animation (20%-100%)
       const normalizedProgress = (progress - 20) / 80;
       
-      // Split Y rotation into two phases:
-      // Phase 1 (20-80%): Slow build to ~10 degrees
-      // Phase 2 (80-100%): Accelerated motion to 20 degrees
-      
       let yEasedProgress;
       
+      // Store phase1Progress for reuse
+      const phase1Progress = progress < 80 ? (progress - 20) / 60 : 1.0; // 0-1 within phase 1
+      
       if (progress < 80) {
-        // Phase 1: Normalize to 0-1 range for 20-80% scroll
-        const phase1Progress = (progress - 20) / 60; // 0-1 within phase 1
-        
         // Use a gentler cubic ease-out for slower buildup
         // This curve will reach 0.5 (10 degrees) at the end of phase 1
         yEasedProgress = 0.5 * (3 * Math.pow(phase1Progress, 2) - 2 * Math.pow(phase1Progress, 3));
@@ -454,13 +448,12 @@ window.addEventListener("scroll", () => {
         xRotationProgress = Math.pow(xNormalizedProgress, 3);
         
         // Ensure smooth transition by blending with main curve
-        // This creates a continuity with the Y rotation animation
         xRotationProgress = Math.min(1.0, Math.max(0, xRotationProgress));
       }
       
       // Calculate max rotation values
       const maxRotationX = -5 * (Math.PI / 180); // 5 degrees in radians
-      const maxRotationY = 20 * (Math.PI / 180); // 20 degrees in radians (increased from 19)
+      const maxRotationY = 20 * (Math.PI / 180); // 20 degrees in radians
       const maxRotationZ = 0; // Keep Z rotation at 0
       
       // Apply gradual rotation
@@ -505,8 +498,6 @@ function animate() {
   // Update time for wave animation
   if (particles) {
     particles.material.uniforms.uTime.value += 0.01;
-    
-    // No additional rotation logic here - all handled in scroll event
   }
 
   // Render the scene
