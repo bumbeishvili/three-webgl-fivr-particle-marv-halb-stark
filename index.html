@@ -46,6 +46,27 @@
             font-family: monospace;
         }
 
+        .scrollProgressPrecise {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+            line-height: 1.4;
+            max-width: 400px;
+            backdrop-filter: blur(2px);
+        }
+
+        /* Add highlight colors for rotation values */
+        .rot-x { color: #ff8080; }
+        .rot-y { color: #80ff80; }
+        .rot-z { color: #8080ff; }
+        
         .section {
             pointer-events: none;
         }
@@ -63,6 +84,11 @@
 <body>
     <canvas class="webgl"></canvas>
     <div class="scrollProgress">0%</div>
+    <div class="scrollProgressPrecise">Scroll: 0.0% | Rotation: inactive<br>
+      X: <span class="rot-x">0.0°</span> 
+      Y: <span class="rot-y">0.0°</span> 
+      Z: <span class="rot-z">0.0°</span>
+    </div>
 
     <!-- Add sections to enable scrolling -->
     <section class="section"></section>
