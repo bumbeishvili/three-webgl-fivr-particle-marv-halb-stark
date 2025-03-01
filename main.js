@@ -79,10 +79,12 @@ const vertexShader = `
 /**
  * Fragment shader creates circular particles with the vertex color
  * Using step function for a hard edge circular shape
- * With color intensity capped to avoid white highlights
+ * With dynamic blending transition from additive (wave) to normal (X shape)
  */
 const fragmentShader = `
     varying vec3 vColor;
+    uniform float uProgress; // Animation progress uniform
+    uniform float uBlendTransition; // Dedicated uniform for blend transition
     
     void main() {
         // Calculate distance from center of point sprite
@@ -90,10 +92,23 @@ const fragmentShader = `
         float dist = length(uv);
         
         // Create simple circular shape with softer edge
-        float circle = smoothstep(0.5, 0.45, dist); // Softer edge (0.45 instead of 0.42)
+        float circle = smoothstep(0.5, 0.45, dist);
         
-        // Output final color with alpha mask
-        gl_FragColor = vec4(vColor, circle * 0.9); // Slightly reduced opacity
+        // Apply smoothstep for more natural transition
+        float blendFactor = smoothstep(0.0, 1.0, uBlendTransition);
+        
+        // Calculate final color components
+        // For additive blending effect: boost the color brightness in wave state
+        // For normal blending in X shape: use normal colors with appropriate alpha
+        vec3 finalColor = vColor * mix(1.5, 1.0, blendFactor);
+        
+        // Control opacity based on blending mode
+        // Lower opacity for additive blending (starting state)
+        // Higher opacity for normal blending (end state)
+        float alpha = mix(0.4, 0.9, blendFactor) * circle;
+        
+        // Output final color with dynamic components
+        gl_FragColor = vec4(finalColor, alpha);
     }
 `;
 
@@ -353,6 +368,7 @@ function initParticles() {
     uniforms: {
       uSize: { value: 0.026 }, // Base size multiplier
       uProgress: { value: 0.0 }, 
+      uBlendTransition: { value: 0.0 }, // Blend transition uniform
       uResolution: {
         value: new THREE.Vector2(
           sceneSize.width * sceneSize.pixelRatio,
@@ -363,10 +379,10 @@ function initParticles() {
       uWaveSpeed: { value: waveSpeed }
     },
     transparent: true,
-    depthWrite: true, // Enable depth writing to fix depth-ordering issues
-    depthTest: true, // Ensure depth testing is enabled
-    // Use standard non-additive blending as requested
-    blending: THREE.NormalBlending
+    depthWrite: false, // Disable depth writing for additive blending
+    depthTest: true,
+    // Start with additive blending for the wave animation
+    blending: THREE.AdditiveBlending
   });
 
   // Create and add points mesh to scene
@@ -408,6 +424,25 @@ window.addEventListener("scroll", () => {
   // Update particle animation progress (0-1)
   if (particles) {
     particles.material.uniforms.uProgress.value = progress / 100;
+    
+    // Calculate blend transition from additive to normal blending
+    // - Wave state (0-30%): Fully additive blending
+    // - Transition period (30-70%): Gradual change to normal blending
+    // - X shape (70-100%): Normal blending
+    const blendProgress = Math.max(0, Math.min(1, (progress - 30) / 40));
+    particles.material.uniforms.uBlendTransition.value = blendProgress;
+    
+    // Switch blending mode at the midpoint of the transition
+    // This creates a smoother visual shift between modes
+    if (blendProgress > 0.5 && particles.material.blending === THREE.AdditiveBlending) {
+      particles.material.blending = THREE.NormalBlending;
+      particles.material.depthWrite = true; // Enable depth writing for normal blending
+      particles.material.needsUpdate = true; // Important: update material after changing blending
+    } else if (blendProgress <= 0.5 && particles.material.blending === THREE.NormalBlending) {
+      particles.material.blending = THREE.AdditiveBlending;
+      particles.material.depthWrite = false; // Disable depth writing for additive blending
+      particles.material.needsUpdate = true; // Important: update material after changing blending
+    }
     
     // Create a smoother easing with a blend between the two phases
     let easedProgress;
