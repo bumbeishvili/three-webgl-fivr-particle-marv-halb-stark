@@ -86,26 +86,16 @@ const vertexShader = `
 const fragmentShader = `
     varying vec3 vColor;
     
-    // Maximum color value to prevent white highlights from additive blending
-    const vec3 maxColor = vec3(0.7, 0.95, 1.0); // Higher blue limit for more vibrant particles
-    
     void main() {
         // Calculate distance from center of point sprite
         vec2 uv = gl_PointCoord - 0.5;
         float dist = length(uv);
         
-        // Create circular shape with enhanced glow at edges
-        float circle = smoothstep(0.5, 0.32, dist); 
-        
-        // Add a subtle inner glow
-        float innerGlow = smoothstep(0.1, 0.3, dist) * 0.5;
-        circle += innerGlow * (1.0 - circle);
-        
-        // Clamp the color to the maximum allowed value
-        vec3 clampedColor = min(vColor, maxColor);
+        // Create simple circular shape with softer edge
+        float circle = smoothstep(0.5, 0.45, dist); // Softer edge (0.45 instead of 0.42)
         
         // Output final color with alpha mask
-        gl_FragColor = vec4(clampedColor, circle);
+        gl_FragColor = vec4(vColor, circle * 0.9); // Slightly reduced opacity
     }
 `;
 
@@ -224,6 +214,12 @@ function initParticles() {
     let targetY = xShape.array[i3 + 1];
     let targetZ = xShape.array[i3 + 2];
     
+    // DETERMINE FRONT/BACK/SIDE BASED ON PRE-ROTATION POSITIONS
+    // Using more precise thresholds to identify front, side and back regions
+    const isFront = targetZ > 0.1; // Clear front-facing particles
+    const isBack = targetZ < -0.1; // Clear back-facing particles
+    const isSide = !isFront && !isBack; // Side particles
+    
     // Apply a slight rotation to the X model to match the reference images
     // Rotate around Y axis by about 15 degrees
     const angleY = Math.PI * 0.15; // Increased Y rotation
@@ -248,50 +244,97 @@ function initParticles() {
     adjustedTargetPositions[i3 + 1] = finalY;
     adjustedTargetPositions[i3 + 2] = finalZ;
 
-    // Calculate variable particle sizes - larger in the center, smaller at edges
-    const normalizedPos = i / adjustedCount;
-    const sizeVariation = Math.sin(normalizedPos * Math.PI); // Creates a curve: small->big->small
-    const randomFactor = 0.8 + Math.random() * 0.4; // Random variation between 0.8 and 1.2
-    adjustedSizes[i] = 1; // Using uniform size for all particles
-
-    // Calculate color gradient from darker to lighter blue
-    // Target X model's center is approximately at (0,0,0)
-    // Calculate distance from center to determine color (edges brighter, center darker)
-    const posX = adjustedTargetPositions[i3];
-    const posY = adjustedTargetPositions[i3 + 1];
-    const posZ = adjustedTargetPositions[i3 + 2];
+    // POSITION ANALYSIS - Determine regions of the X shape
+    // Calculate distance from center in XY plane (for corner detection)
+    const distFromCenterXY = Math.sqrt(rotatedX * rotatedX + finalY * finalY);
     
-    // Calculate distance from center (0,0,0)
-    const distFromCenter = Math.sqrt(posX * posX + posY * posY + posZ * posZ);
+    // Normalize the distance for gradient calculation (0 = center, 1 = far edge)
+    // Using a smaller divisor to create a more compressed gradient (faster transition)
+    const normalizedDist = Math.min(distFromCenterXY / 0.5, 1.0);
     
-    // Find the farthest distance to normalize against
-    const maxDistance = 1.0;  
+    // SIZE CALCULATION BASED ON POSITION
+    // More dramatic size difference between center and edges
+    const particleSize = isFront ? 
+                        (0.8 + (normalizedDist * 0.5) + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
+                        (0.7 + (Math.random() * 0.1)); // Back: Smaller than before
     
-    // Create a different distance metric that emphasizes edges more consistently
-    // This calculation creates a more uniform edge highlighting effect
-    // We want particles on the outer edges of the X to be bright, regardless of absolute distance
+    adjustedSizes[i] = particleSize;
     
-    // Calculate distance from the "skeleton" line of the X - approximate by finding distance to origin plane
-    // This makes points farther from the center line of the X brighter
-    const distFromCenterLine = Math.abs(posY);
+    // COLOR CALCULATION - GRADIENT FOR FRONT FACE
+    // Dark blue for back particles and front center
+    const darkBlue = new THREE.Color("#0452D5");
     
-    // Combine with absolute distance for a more uniform edge highlighting
-    const edgeFactor = Math.max(
-      distFromCenter / maxDistance,
-      distFromCenterLine / 0.3  // Emphasize edges based on distance from central axis
-    );
+    // Light blue for front corners/ends
+    const lightBlue = new THREE.Color("#63BEF4");
     
-    // Apply curve and clamp
-    let normalizedDist = Math.min(edgeFactor, 1.0);
-    normalizedDist = Math.pow(normalizedDist, 0.7); // Adjust power curve
+    // Apply color based on position
+    let color;
     
-    // Create color gradient based on distance from center
-    // Outer edges (normalizedDist = 1.0) will be bright blue
-    // Center (normalizedDist = 0.0) will be darker blue
-    const brightBlue = new THREE.Color("#a8ecff"); // Brighter cyan-blue for edges
-    const darkBlue = new THREE.Color("#0045cc");   // Richer dark blue for center
-    
-    const color = new THREE.Color().lerpColors(darkBlue, brightBlue, normalizedDist);
+    if (isBack) {
+        // Back side: Always dark blue
+        color = darkBlue.clone();
+    } else if (isFront) {
+        // Front side: Gradient from dark center to light corners
+        // Apply a contrast-enhancing function for more dramatic transition
+        
+        // Create an S-curve with steeper middle section
+        // This creates a darker center with a more sudden transition to light colors
+        let enhancedGradient;
+        
+        if (normalizedDist < 0.3) {
+            // Dark center area (inner 30%)
+            enhancedGradient = normalizedDist * 0.3; // Even darker center
+        } else if (normalizedDist < 0.5) {
+            // Transition area (30-50% from center)
+            // Rapid transition from dark to light in this range
+            const transitionPos = (normalizedDist - 0.3) / 0.2; // 0-1 in this range
+            enhancedGradient = 0.09 + transitionPos * 0.71; // 0.09-0.8 steeper curve
+        } else {
+            // Outer area (beyond 50% from center)
+            // Mostly light blue with subtle gradient to pure light at edges
+            enhancedGradient = 0.8 + (normalizedDist - 0.5) * 0.4; // 0.8-1.0 gentle slope
+        }
+        
+        color = new THREE.Color().lerpColors(
+            darkBlue,  // Center color
+            lightBlue, // Edge color
+            enhancedGradient  // S-curve transition for more dramatic contrast
+        );
+    } else {
+        // Side surfaces: Gradient based on Z position
+        // Normalize Z position for color gradient (0 = back, 1 = front)
+        const zPos = targetZ; // Original Z value from GLB model
+        
+        // Create normalized value from -0.1 to 0.1 range to 0 to 1 range
+        const normalizedZPos = (zPos + 0.1) / 0.2;
+        
+        // Calculate side gradient - transitions from light to dark from front to back
+        // Also include the XY distance to match with the front face gradient
+        let sideGradient;
+        
+        if (normalizedDist > 0.5) {
+            // For edges of the X, use gradient based on both Z and XY distance
+            // This ensures side color near light front regions is also light
+            const xyFactor = (normalizedDist - 0.5) * 2; // 0-1 for outer half
+            
+            // Dramatically increase the effect - make front-facing sides much lighter
+            // and back-facing sides much darker
+            sideGradient = Math.pow(normalizedZPos, 0.5) * (0.6 + xyFactor * 0.4); // 0.6-1.0 range for edges
+        } else {
+            // For parts closer to center, still increase the effect but keep darker overall
+            // Use power function to create stronger contrast
+            sideGradient = Math.pow(normalizedZPos, 0.7) * 0.5; // 0-0.5 range (still darker for center)
+        }
+        
+        // Boost the overall side gradient to ensure front sides are clearly light
+        sideGradient = Math.max(sideGradient, normalizedZPos * 0.8);
+        
+        color = new THREE.Color().lerpColors(
+            darkBlue,  // Dark for back-facing sides
+            lightBlue, // Light for front-facing sides
+            sideGradient // Z-based gradient for smooth transition
+        );
+    }
     
     // Store color components
     colors[i3] = color.r;
@@ -310,8 +353,8 @@ function initParticles() {
     vertexShader,
     fragmentShader,
     uniforms: {
-      uSize: { value: 0.025 }, // Increased particle size for better visibility
-      uProgress: { value: 0.0 }, // Animation progress (0-1)
+      uSize: { value: 0.026 }, // Base size multiplier
+      uProgress: { value: 0.0 }, 
       uResolution: {
         value: new THREE.Vector2(
           sceneSize.width * sceneSize.pixelRatio,
@@ -319,11 +362,13 @@ function initParticles() {
         ),
       },
       uTime: { value: 0.0 },
-      uWaveSpeed: { value: waveSpeed } // Use the global wave speed variable
+      uWaveSpeed: { value: waveSpeed }
     },
     transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending, // Additive blending for glow effect
+    depthWrite: true, // Enable depth writing to fix depth-ordering issues
+    depthTest: true, // Ensure depth testing is enabled
+    // Use standard non-additive blending as requested
+    blending: THREE.NormalBlending
   });
 
   // Create and add points mesh to scene
@@ -332,6 +377,9 @@ function initParticles() {
   
   // Add a slight scale adjustment to make the X shape more distinctive
   particles.scale.set(1.1, 1.0, 1.0);
+  
+  // Set renderOrder to ensure proper transparency handling
+  particles.renderOrder = 0;
   
   scene.add(particles);
 }
