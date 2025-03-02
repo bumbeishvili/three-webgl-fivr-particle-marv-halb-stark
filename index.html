@@ -36,15 +36,6 @@
         section:nth-child(odd) {
             justify-content: flex-end;
         }
-
-        .scrollProgress {
-            position: fixed;
-            top: 50%;
-            right: 20px;
-            transform: translateY(-50%);
-            color: white;
-            font-family: monospace;
-        }
         
         .section {
             pointer-events: none;
@@ -63,7 +54,6 @@
 
 <body>
     <canvas class="webgl"></canvas>
-    <div class="scrollProgress">0%</div>
 
     <!-- Add sections to enable scrolling -->
     <section class="section"></section>

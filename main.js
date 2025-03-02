@@ -545,7 +545,7 @@ for (let i = 0; i < particlesCount; i++) {
  */
 const loader = new GLTFLoader();
 let xShape;
-loader.load("./x.glb", (gltf) => {
+loader.load("https://bumbeishvili.github.io/three-webgl-fivr-particle-marv-halb-stark/x.glb", (gltf) => {
   xShape = gltf.scene.children[0].geometry.attributes.position;
   initParticles();
 });
@@ -793,10 +793,6 @@ window.addEventListener("scroll", () => {
   const progress =
     (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) *
     100;
-  
-  // Update progress display in the UI
-  const scrollPercentage = Math.round(progress);
-  document.querySelector(".scrollProgress").textContent = `${scrollPercentage}%`;
   
   // Set the target progress (will be smoothly interpolated in animation loop)
   targetProgress = progress / 100;
