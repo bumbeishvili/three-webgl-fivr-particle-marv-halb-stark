@@ -1,14 +1,17 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+// Development mode flag - set to false in production
+const isDevelopment = false;
+
 // Global configuration
 const waveSpeed = 1; // Set to 0 to disable wave animations
 let waveOffsetX = -0.35; // Master X offset value
-let waveOffsetY = 0.05; // Master Y offset value 
-let waveOffsetZ = -1.65; // Master Z offset value
-let waveRotationX = -5.73 * (Math.PI / 180); // Controls the X rotation of the wave pattern (radians)
+let waveOffsetY = -0.3; // Master Y offset value 
+let waveOffsetZ = -1.15; // Master Z offset value
+let waveRotationX = 0.73 * (Math.PI / 180); // Controls the X rotation of the wave pattern (radians)
 let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wave pattern (radians)
-let waveRotationZ = 0.0; // Controls the Z rotation of the wave pattern (radians)
+let waveRotationZ = .0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
 let distanceDarknessFactor = 1.80; // Controls how much particles darken based on distance (0-1)
@@ -24,23 +27,8 @@ let mainAnimationEndProgress = 0.57; // The main movement animation completes at
 // Fade-out animation parameter
 let fadeOutStartProgress = 0.6; // Start fadeout animation at 90% of the scroll progress
 
-// Mouse follower circle parameters
-let mouseFollowerEnabled = false; // Toggle to enable/disable the mouse follower (set to false to disable)
-let mouseFollowerSize = 0.1; // Size of the circle that follows the mouse
-let mouseFollowerColor = '#3366ff'; // Color of the circle
-let mouseFollowerOpacity = 0; // Opacity of the circle (0-1)
-let mouseFollowerDepth = 2.0; // Z-depth position of the follower (smaller = closer to camera)
-let mouseFollower; // Will hold the circle mesh object
-
-// Particle disruption effect parameters
-let disruptionEnabled = false; // Toggle to enable/disable the disruption effect (set to false to disable)
-let disruptionRadius = 0.3; // How far from the mouse the effect reaches
-let disruptionStrength = 0.3; // How strongly particles are pushed away
-let disruptionFalloff = 0.1; // How quickly the effect diminishes with distance (higher = sharper falloff)
-let mouseWorldPosition = new THREE.Vector3(); // Will store the mouse position in world space
-
 // Wave density controls - these parameters affect how the particles are arranged
-let waveWidthFactor = 1.5; // Width of the wave pattern (X-axis spread)
+let waveWidthFactor = 1.7; // Width of the wave pattern (X-axis spread)
 let waveDepthFactor = 6.0; // Depth of the wave pattern (Z-axis spread)
 let waveZOffset = 1.8; // Z-offset for the wave centered positioning
 
@@ -84,7 +72,9 @@ function getScriptParams() {
 
 // Read script parameters
 const scriptParams = getScriptParams();
-console.log('Script parameters:', scriptParams);
+if (isDevelopment) {
+  console.log('Script parameters:', scriptParams);
+}
 
 // Parameter override system
 function applyParameterOverrides() {
@@ -110,19 +100,6 @@ function applyParameterOverrides() {
     mainAnimationEndProgress: 'number',
     fadeOutStartProgress: 'number',
     scrollEasing: 'number',
-    
-    // Mouse follower parameters
-    mouseFollowerEnabled: 'boolean',
-    mouseFollowerSize: 'number',
-    mouseFollowerColor: 'string',
-    mouseFollowerOpacity: 'number',
-    mouseFollowerDepth: 'number',
-    
-    // Disruption parameters
-    disruptionEnabled: 'boolean',
-    disruptionRadius: 'number',
-    disruptionStrength: 'number',
-    disruptionFalloff: 'number',
     
     // Wave density parameters
     waveWidthFactor: 'number',
@@ -161,7 +138,7 @@ function applyParameterOverrides() {
   });
   
   // Log which parameters were overridden
-  if (overriddenParams.length > 0) {
+  if (overriddenParams.length > 0 && isDevelopment) {
     console.log('Parameters overridden via URL:', overriddenParams.join(', '));
   }
 }
@@ -169,10 +146,6 @@ function applyParameterOverrides() {
 // Apply parameter overrides
 applyParameterOverrides();
 
-// Access specific parameters
-if (scriptParams.v) {
-  console.log('Version:', scriptParams.v);
-}
 
 // Initialize sections and calculate positions when DOM is loaded
 window.addEventListener("DOMContentLoaded", () => {
@@ -199,17 +172,7 @@ window.addEventListener("DOMContentLoaded", () => {
       // Update end position
       section2EndPosition = endPosition;
 
-      const section1Height = sectionElements[0].offsetHeight;
 
-      // Calculate start position for animation
-      const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
-
-      // Log for debugging
-      console.log("Animation starts at:", animationStartPosition);
-      console.log(`Animation ends at end of section ${animationEndSection}:`, section2EndPosition);
-      console.log("Animation length:", section2EndPosition - animationStartPosition);
-      console.log(`Main animation completes at ${mainAnimationEndProgress * 100}% of scroll progress`);
-      console.log(`Fade-out animation starts at ${fadeOutStartProgress * 100}% of scroll progress`);
     }
   }, 100); // Small delay to ensure the particle system is initialized
 });
@@ -229,16 +192,7 @@ window.addEventListener("resize", () => {
     // Update end position
     section2EndPosition = endPosition;
 
-    const section1Height = sectionElements[0].offsetHeight;
-
-    // Calculate start position for animation
-    const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
-
-    // Log for debugging
-    console.log("Animation starts at (resized):", animationStartPosition);
-    console.log(`Animation ends at end of section ${animationEndSection} (resized):`, section2EndPosition);
-    console.log(`Main animation completes at ${mainAnimationEndProgress * 100}% of scroll progress`);
-    console.log(`Fade-out animation starts at ${fadeOutStartProgress * 100}% of scroll progress`);
+   
   }
 });
 
@@ -265,7 +219,7 @@ window.addEventListener("scroll", () => {
     targetProgress = progress;
 
     // Enhanced debugging - log more frequently when we're in important animation phases
-    if (targetProgress > 0.75) {
+    if (targetProgress > 0.75 && isDevelopment) {
       // Calculate main animation completion percentage (0-100%)
       const mainAnimProgress = Math.min(100, (targetProgress / mainAnimationEndProgress) * 100);
 
@@ -275,14 +229,6 @@ window.addEventListener("scroll", () => {
         phase = "Fade-out animation";
       } else if (targetProgress >= mainAnimationEndProgress) {
         phase = "Between main and fade-out";
-      }
-
-      console.log(`Scroll progress: ${targetProgress.toFixed(2)}, Phase: ${phase}`);
-      console.log(`Main animation: ${mainAnimProgress.toFixed(1)}% complete`);
-
-      if (targetProgress > fadeOutStartProgress) {
-        const visibilityFactor = 1.0 - ((targetProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress));
-        console.log(`Fade-out visibility: ${visibilityFactor.toFixed(2)} (1 = visible, 0 = invisible)`);
       }
     }
   } else {
@@ -299,21 +245,6 @@ document.addEventListener('mousemove', (event) => {
   targetMouseY = (event.clientY / window.innerHeight) * 2 - 1;
 });
 
-// Add keyboard listener to toggle mouse follower
-document.addEventListener('keydown', (event) => {
-  // Press 'F' to toggle mouse follower
-  if (event.key.toLowerCase() === 'f') {
-    mouseFollowerEnabled = !mouseFollowerEnabled;
-
-    // Show/hide the existing follower
-    if (mouseFollower) {
-      mouseFollower.visible = mouseFollowerEnabled;
-    } else if (mouseFollowerEnabled) {
-      // Create it if it doesn't exist yet
-      createMouseFollower();
-    }
-  }
-});
 
 /**
  * Shaders
@@ -335,11 +266,6 @@ const vertexShader = `
     uniform float uWaveRotationY;
     uniform float uWaveRotationZ;
     uniform float uTime;
-    uniform bool uDisruptionEnabled;
-    uniform vec3 uMousePosition;
-    uniform float uDisruptionRadius;
-    uniform float uDisruptionStrength;
-    uniform float uDisruptionFalloff;
     attribute vec3 aPositionTarget;
     attribute float aSize;
     attribute float aTargetSize; // Add attribute for X shape target size
@@ -467,26 +393,6 @@ const vertexShader = `
         
         // Simply transition directly from static position to target
         vec3 finalPosition = mix(staticPosition, targetPosition, assemblyProgress);
-        
-        // Apply disruption effect if enabled
-        if (uDisruptionEnabled) {
-            // Apply disruption effect based on distance to mouse
-            vec3 positionToMouse = finalPosition - uMousePosition;
-            float distanceToMouse = length(positionToMouse);
-            
-            // Only affect particles within the disruption radius
-            if (distanceToMouse < uDisruptionRadius) {
-                // Calculate falloff factor (1 at center, 0 at edge)
-                float falloff = 1.0 - pow(distanceToMouse / uDisruptionRadius, uDisruptionFalloff);
-                
-                // Normalize direction vector
-                vec3 direction = normalize(positionToMouse);
-                
-                // Push particles away from mouse position
-                // Strength diminishes with distance (controlled by falloff)
-                finalPosition += direction * falloff * uDisruptionStrength;
-            }
-        }
         
         // Save finalPosition after all transformations but before model matrix
         vFinalPosition = finalPosition;
@@ -757,8 +663,8 @@ for (let i = 0; i < particlesCount; i++) {
   gridColors[i3 + 2] = gridColor.b;
 
   // Create a U-shaped wave effect (static, no animation)
-  const parabolicFactor = 0.25;
-  const baseSineWave = Math.sin(x * Math.PI - Math.PI / 2) * 0.18;
+  const parabolicFactor = 0.3;
+  const baseSineWave = Math.sin(x * Math.PI - Math.PI / 2) * 0.1;
   const uShapeComponent = parabolicFactor * (x * x * 2.0);
 
   // Combine the components for static shape
@@ -999,12 +905,6 @@ function initParticles() {
       uDistanceDarknessFactor: { value: distanceDarknessFactor },
       uHeightDarknessFactor: { value: heightDarknessFactor },
       uDistantHeightBoost: { value: distantHeightBoost },
-      // Add disruption effect uniforms
-      uDisruptionEnabled: { value: disruptionEnabled },
-      uMousePosition: { value: mouseWorldPosition },
-      uDisruptionRadius: { value: disruptionRadius },
-      uDisruptionStrength: { value: disruptionStrength },
-      uDisruptionFalloff: { value: disruptionFalloff },
       uFadeOutProgress: { value: 0.0 } // Initialize fade-out progress
     },
     transparent: true,
@@ -1159,9 +1059,6 @@ function animate() {
   if (particles && particles.material.uniforms.uTime) {
     particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
 
-    // Update disruption effect uniforms - always false
-    particles.material.uniforms.uDisruptionEnabled.value = false; // Force this to false
-    // No need to update other disruption-related values since it's disabled
   }
 
   // Smooth mouse movement
@@ -1186,35 +1083,7 @@ function animate() {
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
 
-    // Mouse follower is disabled, so we don't need to update its position
-    // The code below won't execute when mouseFollowerEnabled is false
-    if (mouseFollowerEnabled && mouseFollower) {
-      // Create a raycaster to get exact 3D position from mouse coordinates
-      const raycaster = new THREE.Raycaster();
-
-      // Use the current smoothed mouse position
-      // Negate the Y value to correct for coordinate system differences
-      const mousePosition = new THREE.Vector2(mouseX, -mouseY);
-
-      // Update the raycaster with the mouse position and camera
-      raycaster.setFromCamera(mousePosition, camera);
-
-      // Calculate the point in 3D space at the specified depth
-      // This gives us precise positioning regardless of camera angle/position
-      const targetZ = mouseFollowerDepth;
-      const distance = (targetZ - camera.position.z) / raycaster.ray.direction.z;
-
-      // Calculate the exact point in 3D space where the ray intersects the z-plane
-      const targetPosition = new THREE.Vector3().copy(camera.position)
-        .add(raycaster.ray.direction.multiplyScalar(distance));
-
-      // Update the follower position
-      mouseFollower.position.x = targetPosition.x;
-      mouseFollower.position.y = targetPosition.y;
-      mouseFollower.position.z = targetZ; // Keep z position constant
-
-      // Don't update mouse world position since disruption is disabled
-    }
+ 
   }
 
   // Render the scene
@@ -1224,110 +1093,38 @@ function animate() {
 // Start animation loop
 animate();
 
-/**
- * Creates a circle that follows the mouse cursor
- */
-function createMouseFollower() {
-  if (!mouseFollowerEnabled) return;
-
-  // Create a circle geometry
-  const geometry = new THREE.CircleGeometry(mouseFollowerSize, 32);
-
-  // Create a material with transparency
-  const material = new THREE.MeshBasicMaterial({
-    color: mouseFollowerColor,
-    transparent: true,
-    opacity: mouseFollowerOpacity,
-    side: THREE.DoubleSide,
-    depthWrite: false, // Prevents the circle from interfering with depth buffer
-  });
-
-  // Create the mesh and add it to the scene
-  mouseFollower = new THREE.Mesh(geometry, material);
-
-  // Position it in front of other elements
-  mouseFollower.position.z = mouseFollowerDepth;
-  mouseFollower.renderOrder = 999; // Ensure it renders on top
-
-  scene.add(mouseFollower);
-}
-
-// Create the mouse follower after setting up the scene
-createMouseFollower();
 
 /**
- * Updates wave offset parameters and applies them to shader uniforms
- * @param {number} x - X offset for the wave pattern
- * @param {number} y - Y offset for the wave pattern
- * @param {number} z - Z offset for the wave pattern
+ * Wave parameter update functions
+ * These functions update both global variables and uniforms in real-time
  */
+
 function updateWaveOffsets(x, y, z) {
   // Update global variables
   waveOffsetX = x;
   waveOffsetY = y;
   waveOffsetZ = z;
 
-  // Update shader uniforms if particles exist
-  if (particles) {
-    particles.material.uniforms.uWaveOffsetX.value = x;
-    particles.material.uniforms.uWaveOffsetY.value = y;
-    particles.material.uniforms.uWaveOffsetZ.value = z;
+  // Update uniform values if the material exists
+  if (particles && particles.material && particles.material.uniforms) {
+    particles.material.uniforms.waveOffset.value.set(x, y, z);
   }
 }
 
-/**
- * Updates wave rotation parameters and applies them to shader uniforms
- * @param {number} x - X rotation for the wave pattern (in radians)
- * @param {number} y - Y rotation for the wave pattern (in radians)
- * @param {number} z - Z rotation for the wave pattern (in radians)
- */
 function updateWaveRotations(x, y, z) {
   // Update global variables
   waveRotationX = x;
   waveRotationY = y;
   waveRotationZ = z;
 
-  // Update shader uniforms if particles exist
-  if (particles) {
-    particles.material.uniforms.uWaveRotationX.value = x;
-    particles.material.uniforms.uWaveRotationY.value = y;
-    particles.material.uniforms.uWaveRotationZ.value = z;
+  // Update uniform values if the material exists
+  if (particles && particles.material && particles.material.uniforms) {
+    particles.material.uniforms.waveRotation.value.set(x, y, z);
   }
 }
 
 /**
- * Updates darkness effect parameters and applies them to shader uniforms
- * @param {number} distance - Factor for distance-based darkening
- * @param {number} height - Factor for height-based darkening
- * @param {number} distantHeight - Factor for boosting darkness of distant high particles
- */
-function updateDarknessParams(distance, height, distantHeight) {
-  // Update global variables
-  distanceDarknessFactor = distance;
-  heightDarknessFactor = height;
-  distantHeightBoost = distantHeight;
-
-  // Update shader uniforms if particles exist
-  if (particles) {
-    particles.material.uniforms.uDistanceDarknessFactor.value = distance;
-    particles.material.uniforms.uHeightDarknessFactor.value = height;
-    particles.material.uniforms.uDistantHeightBoost.value = distantHeight;
-  }
-}
-
-/**
- * Updates the debug display with current values
- * Shows scroll progress, rotation status, wave offset values, and camera information
- */
-function updateDebugDisplay() {
-  // This function is intentionally emptied as it's only used for debugging
-}
-
-/**
- * Updates wave density parameters and regenerates particles if needed
- * @param {number} width - Width factor for the wave pattern
- * @param {number} depth - Depth factor for the wave pattern
- * @param {number} zOffset - Z-offset for wave positioning
+ * Updates the wave density parameters
  */
 function updateWaveDensity(width, depth, zOffset) {
   // Update global wave density variables

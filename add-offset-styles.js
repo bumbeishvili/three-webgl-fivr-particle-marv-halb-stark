@@ -1,1 +1,0 @@
-let css = document.createElement("style"); css.type = "text/css"; css.innerHTML = `.off-x { color: #FF5555; font-weight: bold; } .off-y { color: #55FF55; font-weight: bold; } .off-z { color: #5555FF; font-weight: bold; }`; document.head.appendChild(css);
