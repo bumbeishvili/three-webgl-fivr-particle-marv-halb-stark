@@ -70,7 +70,7 @@ window.addEventListener("DOMContentLoaded", () => {
     updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
     
     // Get all section elements - updated to use class selector
-    sectionElements = Array.from(document.querySelectorAll('.section'));
+    sectionElements = Array.from(document.querySelectorAll('section'));
     
     // Calculate the position where animation should end (if sections exist)
     if (sectionElements.length >= animationEndSection) {
