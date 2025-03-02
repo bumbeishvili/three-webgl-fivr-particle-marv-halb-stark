@@ -15,6 +15,21 @@ let distanceDarknessFactor = 1.80; // Controls how much particles darken based o
 let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
+// Mouse follower circle parameters
+let mouseFollowerEnabled = true; // Toggle to enable/disable the mouse follower
+let mouseFollowerSize = 0.1; // Size of the circle that follows the mouse
+let mouseFollowerColor = '#3366ff'; // Color of the circle
+let mouseFollowerOpacity = 0; // Opacity of the circle (0-1)
+let mouseFollowerDepth = 2.0; // Z-depth position of the follower (smaller = closer to camera)
+let mouseFollower; // Will hold the circle mesh object
+
+// Particle disruption effect parameters
+let disruptionEnabled = true; // Toggle to enable/disable the disruption effect
+let disruptionRadius = 0.3; // How far from the mouse the effect reaches
+let disruptionStrength = 0.3; // How strongly particles are pushed away
+let disruptionFalloff = 0.1; // How quickly the effect diminishes with distance (higher = sharper falloff)
+let mouseWorldPosition = new THREE.Vector3(); // Will store the mouse position in world space
+
 // Wave density controls - these parameters affect how the particles are arranged
 let waveWidthFactor = 1.5; // Width of the wave pattern (X-axis spread)
 let waveDepthFactor = 6.0; // Depth of the wave pattern (Z-axis spread)
@@ -44,6 +59,22 @@ document.addEventListener('mousemove', (event) => {
   targetMouseY = (event.clientY / window.innerHeight) * 2 - 1;
 });
 
+// Add keyboard listener to toggle mouse follower
+document.addEventListener('keydown', (event) => {
+  // Press 'F' to toggle mouse follower
+  if (event.key.toLowerCase() === 'f') {
+    mouseFollowerEnabled = !mouseFollowerEnabled;
+    
+    // Show/hide the existing follower
+    if (mouseFollower) {
+      mouseFollower.visible = mouseFollowerEnabled;
+    } else if (mouseFollowerEnabled) {
+      // Create it if it doesn't exist yet
+      createMouseFollower();
+    }
+  }
+});
+
 /**
  * Shaders
  * -------
@@ -63,6 +94,11 @@ const vertexShader = `
     uniform float uWaveRotationY;
     uniform float uWaveRotationZ;
     uniform float uTime;
+    uniform bool uDisruptionEnabled;
+    uniform vec3 uMousePosition;
+    uniform float uDisruptionRadius;
+    uniform float uDisruptionStrength;
+    uniform float uDisruptionFalloff;
     attribute vec3 aPositionTarget;
     attribute float aSize;
     attribute float aTargetSize; // Add attribute for X shape target size
@@ -186,6 +222,26 @@ const vertexShader = `
         
         // Simply transition directly from static position to target
         vec3 finalPosition = mix(staticPosition, targetPosition, assemblyProgress);
+        
+        // Apply disruption effect if enabled
+        if (uDisruptionEnabled) {
+            // Apply disruption effect based on distance to mouse
+            vec3 positionToMouse = finalPosition - uMousePosition;
+            float distanceToMouse = length(positionToMouse);
+            
+            // Only affect particles within the disruption radius
+            if (distanceToMouse < uDisruptionRadius) {
+                // Calculate falloff factor (1 at center, 0 at edge)
+                float falloff = 1.0 - pow(distanceToMouse / uDisruptionRadius, uDisruptionFalloff);
+                
+                // Normalize direction vector
+                vec3 direction = normalize(positionToMouse);
+                
+                // Push particles away from mouse position
+                // Strength diminishes with distance (controlled by falloff)
+                finalPosition += direction * falloff * uDisruptionStrength;
+            }
+        }
         
         // Save finalPosition after all transformations but before model matrix
         vFinalPosition = finalPosition;
@@ -693,7 +749,13 @@ function initParticles() {
       uWaveRotationZ: { value: waveRotationZ },
       uDistanceDarknessFactor: { value: distanceDarknessFactor },
       uHeightDarknessFactor: { value: heightDarknessFactor },
-      uDistantHeightBoost: { value: distantHeightBoost }
+      uDistantHeightBoost: { value: distantHeightBoost },
+      // Add disruption effect uniforms
+      uDisruptionEnabled: { value: disruptionEnabled },
+      uMousePosition: { value: mouseWorldPosition },
+      uDisruptionRadius: { value: disruptionRadius },
+      uDisruptionStrength: { value: disruptionStrength },
+      uDisruptionFalloff: { value: disruptionFalloff }
     },
     transparent: true,
     depthWrite: false, // Disable depth writing for additive blending
@@ -841,6 +903,13 @@ function animate() {
   // Update shader uniforms
   if (particles && particles.material.uniforms.uTime) {
     particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
+    
+    // Update disruption effect uniforms
+    particles.material.uniforms.uDisruptionEnabled.value = disruptionEnabled;
+    particles.material.uniforms.uMousePosition.value = mouseWorldPosition;
+    particles.material.uniforms.uDisruptionRadius.value = disruptionRadius;
+    particles.material.uniforms.uDisruptionStrength.value = disruptionStrength;
+    particles.material.uniforms.uDisruptionFalloff.value = disruptionFalloff;
   }
   
   // Smooth mouse movement
@@ -864,6 +933,36 @@ function animate() {
     
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
+
+    // Update mouse follower position if it exists
+    if (mouseFollowerEnabled && mouseFollower) {
+      // Create a raycaster to get exact 3D position from mouse coordinates
+      const raycaster = new THREE.Raycaster();
+      
+      // Use the current smoothed mouse position
+      // Negate the Y value to correct for coordinate system differences
+      const mousePosition = new THREE.Vector2(mouseX, -mouseY);
+      
+      // Update the raycaster with the mouse position and camera
+      raycaster.setFromCamera(mousePosition, camera);
+      
+      // Calculate the point in 3D space at the specified depth
+      // This gives us precise positioning regardless of camera angle/position
+      const targetZ = mouseFollowerDepth;
+      const distance = (targetZ - camera.position.z) / raycaster.ray.direction.z;
+      
+      // Calculate the exact point in 3D space where the ray intersects the z-plane
+      const targetPosition = new THREE.Vector3().copy(camera.position)
+        .add(raycaster.ray.direction.multiplyScalar(distance));
+      
+      // Update the follower position
+      mouseFollower.position.x = targetPosition.x;
+      mouseFollower.position.y = targetPosition.y;
+      mouseFollower.position.z = targetZ; // Keep z position constant
+      
+      // Store the mouse world position for the disruption effect
+      mouseWorldPosition.copy(mouseFollower.position);
+    }
   }
   
   // Render the scene
@@ -872,6 +971,37 @@ function animate() {
 
 // Start animation loop
 animate();
+
+/**
+ * Creates a circle that follows the mouse cursor
+ */
+function createMouseFollower() {
+  if (!mouseFollowerEnabled) return;
+  
+  // Create a circle geometry
+  const geometry = new THREE.CircleGeometry(mouseFollowerSize, 32);
+  
+  // Create a material with transparency
+  const material = new THREE.MeshBasicMaterial({
+    color: mouseFollowerColor,
+    transparent: true,
+    opacity: mouseFollowerOpacity,
+    side: THREE.DoubleSide,
+    depthWrite: false, // Prevents the circle from interfering with depth buffer
+  });
+  
+  // Create the mesh and add it to the scene
+  mouseFollower = new THREE.Mesh(geometry, material);
+  
+  // Position it in front of other elements
+  mouseFollower.position.z = mouseFollowerDepth;
+  mouseFollower.renderOrder = 999; // Ensure it renders on top
+  
+  scene.add(mouseFollower);
+}
+
+// Create the mouse follower after setting up the scene
+createMouseFollower();
 
 /**
  * Updates wave offset parameters and applies them to shader uniforms
@@ -1078,5 +1208,4 @@ function regenerateParticles() {
   particles.material.depthWrite = currentDepthWrite;
 }
 
-// Add event listeners for debug interface
-// Debug overlay is removed as it's not needed for production
+
