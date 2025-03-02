@@ -69,11 +69,9 @@ function getScriptParams() {
   const currentScript = Array.from(document.getElementsByTagName('script')).map(d=>d.src).find(d=>d.includes('bumbeishvili'))
 
   if(!currentScript) return {}
-  // Get the src attribute
-  const src = currentScript.src;
-
+ 
   // Parse the URL
-  const url = new URL(src);
+  const url = new URL(currentScript);
 
   // Return the parameters as an object
   const params = {};
