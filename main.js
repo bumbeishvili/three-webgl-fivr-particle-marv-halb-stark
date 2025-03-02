@@ -766,8 +766,8 @@ function initParticles() {
   const adjustedTargetPositions = new Float32Array(adjustedCount * 3);
 
   // Define color palette once for both grid and X shape
-  const darkBlue = new THREE.Color("#0452D5");
-  const lightBlue = new THREE.Color("#63BEF4");
+  const darkBlue = new THREE.Color("#0b5baa");
+  const lightBlue = new THREE.Color("#98d8ff");
 
   // Copy data to the adjusted arrays
   for (let i = 0; i < adjustedCount; i++) {
@@ -783,7 +783,7 @@ function initParticles() {
 
     // Get target positions from the X model
     let targetX = xShape.array[i3];
-    let targetY = xShape.array[i3 + 1];
+    let targetY = xShape.array[i3 + 1] ; // Scale Y coordinate by 1.1 for a taller X shape
     let targetZ = xShape.array[i3 + 2];
 
     // DETERMINE FRONT/BACK/SIDE BASED ON PRE-ROTATION POSITIONS
@@ -822,13 +822,13 @@ function initParticles() {
 
     // Normalize the distance for gradient calculation (0 = center, 1 = far edge)
     // Using a smaller divisor to create a more compressed gradient (faster transition)
-    const normalizedDist = Math.min(distFromCenterXY / 0.5, 1.0);
+    const normalizedDist = Math.min(distFromCenterXY / 0.7, 1.0);
 
     // SIZE CALCULATION BASED ON POSITION
     // More dramatic size difference between center and edges
     const particleSize = isFront ?
-      (0.8 + (normalizedDist * 0.5) + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
-      (0.7 + (Math.random() * 0.1)); // Back: Smaller than before
+      (0.4 + (normalizedDist * 0.5)*1.6 + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
+      (0.4 + (Math.random() * 0.1)); // Back: Smaller than before
 
     // Store X shape sizes separately from grid sizes
     adjustedTargetSizes[i] = particleSize;
@@ -962,7 +962,7 @@ function initParticles() {
   particles.geometry.setIndex(null);
 
   // Add a slight scale adjustment to make the X shape more distinctive
-  particles.scale.set(1.1, 1.0, 1.0);
+  particles.scale.set(1.1, 1.1, 1.1);
 
   // Set renderOrder to ensure proper transparency handling
   particles.renderOrder = 0;
@@ -1219,7 +1219,7 @@ function regenerateParticles() {
   const sizes = sizeAttribute.array;
 
   // Define color palette for recalculation
-  const darkBlue = new THREE.Color("#0452D5");
+  const darkBlue = new THREE.Color("#112046");
   const lightBlue = new THREE.Color("#63BEF4");
 
   // Recalculate positions with new wave density parameters
