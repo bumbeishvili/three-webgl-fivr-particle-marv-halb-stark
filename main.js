@@ -180,6 +180,34 @@ window.addEventListener("DOMContentLoaded", () => {
 
 // Update the recalculation on window resize
 window.addEventListener("resize", () => {
+  // Update sceneSize values
+  sceneSize.width = window.innerWidth;
+  sceneSize.height = window.innerHeight;
+  sceneSize.pixelRatio = Math.min(window.devicePixelRatio, 2);
+  
+  // Update camera aspect ratio
+  camera.aspect = sceneSize.width / sceneSize.height;
+  camera.updateProjectionMatrix();
+  
+  // Update renderer size
+  renderer.setSize(sceneSize.width, sceneSize.height);
+  renderer.setPixelRatio(sceneSize.pixelRatio);
+  
+  // Update particle uniforms if they exist
+  if (particles && particles.material && particles.material.uniforms) {
+    // Use the same format as in the initial setup
+    particles.material.uniforms.uResolution.value.set(
+      sceneSize.width * sceneSize.pixelRatio,
+      sceneSize.height * sceneSize.pixelRatio
+    );
+    
+    // Use the shared function for point size calculation
+    particles.material.uniforms.uSize.value = calculatePointSize();
+    
+    // Make sure the material knows it's been updated
+    particles.material.needsUpdate = true;
+  }
+  
   // Recalculate section positions on resize
   if (sectionElements.length >= animationEndSection) {
     section1StartPosition = 0; // Section 1 starts at top of page
@@ -192,8 +220,6 @@ window.addEventListener("resize", () => {
 
     // Update end position
     section2EndPosition = endPosition;
-
-   
   }
 });
 
@@ -702,6 +728,22 @@ loader.load("https://bumbeishvili.github.io/three-webgl-fivr-particle-marv-halb-
 });
 
 /**
+ * Calculate the point size based on screen dimensions
+ * This ensures consistent point sizes across different devices and screen sizes
+ */
+function calculatePointSize() {
+  // Base size for a reference width of 1920px
+  const baseSize = 0.026;
+  const referenceWidth = 1920;
+  
+  // Scale factor that increases size on smaller screens and decreases on larger screens
+  // The power value of 0.4 makes the scaling more gradual
+  const scaleFactor = Math.pow(referenceWidth / window.innerWidth, 0.4);
+  
+  return baseSize * scaleFactor;
+}
+
+/**
  * Initialize the particle system
  * - Creates geometry with position, size, and color attributes
  * - Sets up target positions from the X model
@@ -886,7 +928,7 @@ function initParticles() {
     vertexShader,
     fragmentShader,
     uniforms: {
-      uSize: { value: 0.026 }, // Base size multiplier
+      uSize: { value: calculatePointSize() }, // Base size multiplier with responsive sizing
       uProgress: { value: 0.0 },
       uBlendTransition: { value: 0.0 }, // Blend transition uniform
       uTime: { value: 0.0 }, // Time uniform for wave animation
