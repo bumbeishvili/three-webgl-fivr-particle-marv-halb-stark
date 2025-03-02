@@ -435,10 +435,11 @@ camera.lookAt(0, 0, 0);
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
   antialias: true,
+  alpha: true // Enable transparency
 });
 renderer.setSize(sceneSize.width, sceneSize.height);
 renderer.setPixelRatio(sceneSize.pixelRatio);
-renderer.setClearColor("#000000");
+renderer.setClearColor(0x000000, 0); // Set alpha to 0 for full transparency
 
 // Particles system variables
 let particles = null;
