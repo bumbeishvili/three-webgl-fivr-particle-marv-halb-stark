@@ -66,12 +66,9 @@ let section2EndPosition = 0; // Position where section 2 ends
 
 // This technique allows a JavaScript file to read its own query parameters
 function getScriptParams() {
-  // Get all script tags in the document
-  const scripts = document.getElementsByTagName('script');
+  const currentScript = Array.from(document.getElementsByTagName('script')).map(d=>d.src).find(d=>d.includes('bumbeishvili'))
 
-  // Find the current script (typically the last one when the code executes)
-  const currentScript = document.currentScript || scripts[scripts.length - 1];
-
+  if(!currentScript) return {}
   // Get the src attribute
   const src = currentScript.src;
 
