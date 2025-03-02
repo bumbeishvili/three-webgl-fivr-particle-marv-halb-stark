@@ -10,7 +10,7 @@
         }
 
         html {
-            background: radial-gradient(circle at center, #0c2954 0%, #081c3b 30%, #040e1f 70%, #010815 100%);
+            background: black;
         }
 
         .webgl {
@@ -49,17 +49,31 @@
             pointer-events: auto;
             z-index: 1;
         }
+
+        /*  background div styles */
+        .background-gradient-gl  {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle 1200px at  center 150%, #214d8e 0%,   #010815 100%);
+            z-index: 0; /* Lower than canvas z-index */
+        }
     </style>
 </head>
 
 <body>
+    <!-- Red background div -->
+    <div class="background-gradient-gl"></div>
+    
     <canvas class="webgl"></canvas>
 
     <!-- Add sections to enable scrolling -->
-    <section class="section">test1</section>
-    <section class="section">test2</section>
-    <section class="section">test3</section>
-    <section class="section">test4</section>
+    <section class="section">Section 1</section>
+    <section class="section">Section 2</section>
+    <section class="section">Section 3</section>
+    <section class="section">Section 4</section>
     <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
         {

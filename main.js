@@ -14,9 +14,9 @@ let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wa
 let waveRotationZ = .0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
-let distanceDarknessFactor = .80; // Controls how much particles darken based on distance (0-1)
-let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
-let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
+let distanceOpacityFactor = 1.80; // Controls how much particles darken based on distance (0-1)
+let heightOpacityFactor = 0.8; // Controls how much particles darken based on height (0-2)
+let distantHeightOpacityBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
 // Animation control parameters
 let animationStartOffset = 0.2; // Start animation after scrolling 20% into section 1 (0-1)
@@ -50,7 +50,8 @@ let sectionElements = []; // Will hold the section elements
 let section1StartPosition = 0; // Position where section 1 starts (usually 0)
 let section2EndPosition = 0; // Position where section 2 ends
 
-
+// Background gradient element reference
+let backgroundGradient = null;
 
 // This technique allows a JavaScript file to read its own query parameters
 function getScriptParams() {
@@ -90,9 +91,9 @@ function applyParameterOverrides() {
     waveRotationZ: 'angle',
     
     // Darkness effect parameters
-    distanceDarknessFactor: 'number',
-    heightDarknessFactor: 'number',
-    distantHeightBoost: 'number',
+    distanceOpacityFactor: 'number',
+    heightOpacityFactor: 'number',
+    distantHeightOpacityBoost: 'number',
     
     // Animation parameters
     animationStartOffset: 'number',
@@ -464,9 +465,9 @@ const fragmentShader = `
     varying float vRawDistanceX; // Raw distance value before normalization
     uniform float uProgress; // Animation progress uniform
     uniform float uBlendTransition; // Dedicated uniform for blend transition
-    uniform float uDistanceDarknessFactor; // Factor for distance-based darkening
-    uniform float uHeightDarknessFactor; // Factor for height-based darkening
-    uniform float uDistantHeightBoost; // Factor for boosting darkness of distant high particles
+    uniform float uDistanceOpacityFactor; // Factor for distance-based darkening
+    uniform float uHeightOpacityFactor; // Factor for height-based darkening
+    uniform float uDistantHeightOpacityBoost; // Factor for boosting darkness of distant high particles
     
     void main() {
         // Calculate distance from center of point sprite
@@ -505,16 +506,16 @@ const fragmentShader = `
         }
         
         // Add a base distance darkness effect regardless of height
-        float baseDistanceDarkness = vDistanceFactor * vDistanceFactor * uDistanceDarknessFactor;
+        float baseDistanceDarkness = vDistanceFactor * vDistanceFactor * uDistanceOpacityFactor;
         
         // Boost the fade factor based on distance for more dramatic effect at distance
-        fadeFactor = mix(fadeFactor, 1.0, vDistanceFactor * vWaveHeight * uDistantHeightBoost);
+        fadeFactor = mix(fadeFactor, 1.0, vDistanceFactor * vWaveHeight * uDistantHeightOpacityBoost);
         
         // Combine the base distance darkness with the height-based fade
         fadeFactor = max(fadeFactor, baseDistanceDarkness);
         
         // Apply height darkness factor to adjust the strength of height-based fading
-        fadeFactor = min(1.0, fadeFactor * uHeightDarknessFactor);
+        fadeFactor = min(1.0, fadeFactor * uHeightOpacityFactor);
         
         // Fade color to black based on combined height and distance factors
         finalColor = mix(finalColor, vec3(0.0, 0.0, 0.0), fadeFactor);
@@ -748,6 +749,7 @@ function initParticles() {
     const isFront = targetZ > 0.1; // Clear front-facing particles
     const isBack = targetZ < -0.1; // Clear back-facing particles
 
+
     // Apply a slight rotation to the X model to match the reference images
     // Rotate around Y axis by about 15 degrees
     const angleY = Math.PI * 0.15; // Increased Y rotation
@@ -901,9 +903,9 @@ function initParticles() {
       uWaveRotationX: { value: waveRotationX },
       uWaveRotationY: { value: waveRotationY },
       uWaveRotationZ: { value: waveRotationZ },
-      uDistanceDarknessFactor: { value: distanceDarknessFactor },
-      uHeightDarknessFactor: { value: heightDarknessFactor },
-      uDistantHeightBoost: { value: distantHeightBoost },
+      uDistanceOpacityFactor: { value: distanceOpacityFactor },
+      uHeightOpacityFactor: { value: heightOpacityFactor },
+      uDistantHeightOpacityBoost: { value: distantHeightOpacityBoost },
       uFadeOutProgress: { value: 0.0 } // Initialize fade-out progress
     },
     transparent: true,
@@ -1083,6 +1085,23 @@ function animate() {
     camera.lookAt(0, 0, 0);
 
  
+  }
+
+  // Handle fadeout animation if we've reached that threshold
+  if (targetProgress >= fadeOutStartProgress) {
+    const fadeOutProgress = Math.max(0, Math.min(1, (1.0 - ((targetProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress)))));
+    
+    // Get background gradient element if not already cached
+    if (!backgroundGradient) backgroundGradient = document.querySelector('.background-gradient-gl');
+    
+    // Synchronize background opacity with particle fadeout
+    if (backgroundGradient) backgroundGradient.style.opacity = fadeOutProgress;
+    
+    // ... existing fade animation code ...
+  } else {
+    // Ensure background is fully visible before fade starts
+    if (!backgroundGradient) backgroundGradient = document.querySelector('.background-gradient-gl');
+    if (backgroundGradient) backgroundGradient.style.opacity = 1;
   }
 
   // Render the scene
