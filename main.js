@@ -41,6 +41,13 @@ let mouseY = 0;
 let targetMouseX = 0;
 let targetMouseY = 0;
 
+// Initialize scrollY at the top level
+let scrollY = window.scrollY;
+// Add variables for smooth scrolling
+let targetProgress = 0;
+let currentProgress = 0;
+let scrollEasing = 0.15; // Adjust this value to control smoothness (lower = smoother)
+
 // Apply initial wave property values when page loads
 window.addEventListener("DOMContentLoaded", () => {
   // This ensures the wave properties use our master values defined at the top of the file
@@ -406,9 +413,6 @@ const sceneSize = {
   height: window.innerHeight,
   pixelRatio: Math.min(window.devicePixelRatio, 2),
 };
-
-// Initialize scrollY at the top level
-let scrollY = window.scrollY;
 
 // No scene helpers - removed for cleaner visualization
 
@@ -794,16 +798,26 @@ window.addEventListener("scroll", () => {
   const scrollPercentage = Math.round(progress);
   document.querySelector(".scrollProgress").textContent = `${scrollPercentage}%`;
   
-  // Update particle animation progress (0-1)
+  // Set the target progress (will be smoothly interpolated in animation loop)
+  targetProgress = progress / 100;
+});
+
+/**
+ * Animation loop that updates every frame
+ */
+function animate() {
+  // Request the next frame
+  requestAnimationFrame(animate);
+  
+  // Smooth scroll progress interpolation
+  currentProgress += (targetProgress - currentProgress) * scrollEasing;
+  
+  // Update particle animation progress with smoothed value
   if (particles) {
-    particles.material.uniforms.uProgress.value = progress / 100;
+    particles.material.uniforms.uProgress.value = currentProgress;
     
-    // Calculate blend transition from additive to normal blending
-    // - Wave state (0-40%): Fully additive blending
-    // - Transition period (40-70%): Gradual change to normal blending
-    // - X shape (70-100%): Normal blending
-    // This matches the position transition timing in the vertex shader
-    const blendProgress = Math.max(0, Math.min(1, (progress - 40) / 30));
+    // Calculate blend transition from additive to normal blending using the smoothed progress
+    const blendProgress = Math.max(0, Math.min(1, (currentProgress - 0.4) / 0.3));
     
     // Apply smoothstep easing to the blend transition for better smoothing
     const smoothBlendProgress = blendProgress * blendProgress * (3 - 2 * blendProgress);
@@ -835,22 +849,22 @@ window.addEventListener("scroll", () => {
     let easedProgress;
     
     // Apply a gradual rotation that builds up throughout the scroll
-    if (progress >= 60) { // Start rotation at 60% scroll (after wave transition completes)
+    if (currentProgress >= 0.6) { // Start rotation at 60% scroll (after wave transition completes)
       // Normalize progress to 0-1 range for the Y rotation animation (60%-100%)
-      const normalizedProgress = (progress - 60) / 40;
+      const normalizedProgress = (currentProgress - 0.6) / 0.4;
       
       let yEasedProgress;
       
       // Store phase1Progress for reuse
-      const phase1Progress = progress < 80 ? (progress - 60) / 20 : 1.0; // 0-1 within phase 1
+      const phase1Progress = currentProgress < 0.8 ? (currentProgress - 0.6) / 0.2 : 1.0; // 0-1 within phase 1
       
-      if (progress < 80) {
+      if (currentProgress < 0.8) {
         // Use a gentler cubic ease-out for slower buildup
         // This curve will reach 0.5 (10 degrees) at the end of phase 1
         yEasedProgress = 0.5 * (3 * Math.pow(phase1Progress, 2) - 2 * Math.pow(phase1Progress, 3));
       } else {
         // Phase 2: Normalize to 0-1 range for 80-100% scroll
-        const phase2Progress = (progress - 80) / 20; // 0-1 within phase 2
+        const phase2Progress = (currentProgress - 0.8) / 0.2; // 0-1 within phase 2
         
         // Start from 0.5 (10 degrees) and build to 1.0 (20 degrees)
         // Use a smooth quadratic curve for acceleration
@@ -862,9 +876,9 @@ window.addEventListener("scroll", () => {
       
       // Calculate X rotation that starts at 80% scroll and reaches 5 degrees at 100%
       let xRotationProgress = 0;
-      if (progress >= 80) {
+      if (currentProgress >= 0.8) {
         // Normalize to 0-1 range for 80-100% scroll
-        const xNormalizedProgress = (progress - 80) / 20;
+        const xNormalizedProgress = (currentProgress - 0.8) / 0.2;
         
         // Use a cubic ease-in for smooth start of X rotation
         xRotationProgress = Math.pow(xNormalizedProgress, 3);
@@ -889,14 +903,6 @@ window.addEventListener("scroll", () => {
       particles.rotation.z = 0;
     }
   }
-});
-
-/**
- * Animation loop that updates every frame
- */
-function animate() {
-  // Request the next frame
-  requestAnimationFrame(animate);
   
   // Update time-based animations
   const elapsedTime = performance.now() / 1000; // Convert to seconds
