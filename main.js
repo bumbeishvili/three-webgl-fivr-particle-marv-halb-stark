@@ -64,6 +64,38 @@ let section2EndPosition = 0; // Position where section 2 ends
 
 
 
+// This technique allows a JavaScript file to read its own query parameters
+function getScriptParams() {
+  // Get all script tags in the document
+  const scripts = document.getElementsByTagName('script');
+
+  // Find the current script (typically the last one when the code executes)
+  const currentScript = document.currentScript || scripts[scripts.length - 1];
+
+  // Get the src attribute
+  const src = currentScript.src;
+
+  // Parse the URL
+  const url = new URL(src);
+
+  // Return the parameters as an object
+  const params = {};
+  url.searchParams.forEach((value, key) => {
+    params[key] = value;
+  });
+
+  return params;
+}
+
+// Usage
+const scriptParams = getScriptParams();
+console.log('Script parameters:', scriptParams);
+
+// Access specific parameters
+if (scriptParams.v) {
+  console.log('Version:', scriptParams.v);
+}
+
 
 // Initialize sections and calculate positions when DOM is loaded
 window.addEventListener("DOMContentLoaded", () => {
@@ -73,28 +105,28 @@ window.addEventListener("DOMContentLoaded", () => {
     updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
     updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
     updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
-    
+
     // Get all section elements - updated to use class selector
     sectionElements = Array.from(document.querySelectorAll('section'));
-    
+
     // Calculate the position where animation should end (if sections exist)
     if (sectionElements.length >= animationEndSection) {
       section1StartPosition = 0; // Section 1 starts at top of page
-      
+
       // Calculate section heights
       let endPosition = 0;
       for (let i = 0; i < animationEndSection; i++) {
         endPosition += sectionElements[i].offsetHeight;
       }
-      
+
       // Update end position
       section2EndPosition = endPosition;
-      
+
       const section1Height = sectionElements[0].offsetHeight;
-      
+
       // Calculate start position for animation
       const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
-      
+
       // Log for debugging
       console.log("Animation starts at:", animationStartPosition);
       console.log(`Animation ends at end of section ${animationEndSection}:`, section2EndPosition);
@@ -110,21 +142,21 @@ window.addEventListener("resize", () => {
   // Recalculate section positions on resize
   if (sectionElements.length >= animationEndSection) {
     section1StartPosition = 0; // Section 1 starts at top of page
-    
+
     // Calculate section heights
     let endPosition = 0;
     for (let i = 0; i < animationEndSection; i++) {
       endPosition += sectionElements[i].offsetHeight;
     }
-    
+
     // Update end position
     section2EndPosition = endPosition;
-    
+
     const section1Height = sectionElements[0].offsetHeight;
-    
+
     // Calculate start position for animation
     const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
-    
+
     // Log for debugging
     console.log("Animation starts at (resized):", animationStartPosition);
     console.log(`Animation ends at end of section ${animationEndSection} (resized):`, section2EndPosition);
@@ -136,30 +168,30 @@ window.addEventListener("resize", () => {
 // Update scroll event handler to use section-based progress
 window.addEventListener("scroll", () => {
   scrollY = window.scrollY;
-  
+
   // Calculate progress based on section positions
   if (section2EndPosition > 0) {
     // Calculate the animation start position
     const section1Height = sectionElements[0].offsetHeight;
     const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
-    
+
     // Animation length is from start position to end of target section
     const animationLength = section2EndPosition - animationStartPosition;
-    
+
     // Calculate how far we've scrolled past the start position
     const scrolledPastStart = Math.max(0, scrollY - animationStartPosition);
-    
+
     // Progress will be 0 at the animation start position and 1 at the end of target section
     const progress = Math.min(1, scrolledPastStart / animationLength);
-    
+
     // Set the target progress (will be smoothly interpolated in animation loop)
     targetProgress = progress;
-    
+
     // Enhanced debugging - log more frequently when we're in important animation phases
     if (targetProgress > 0.75) {
       // Calculate main animation completion percentage (0-100%)
       const mainAnimProgress = Math.min(100, (targetProgress / mainAnimationEndProgress) * 100);
-      
+
       // Determine which animation phase we're in
       let phase = "Main animation";
       if (targetProgress >= fadeOutStartProgress) {
@@ -167,10 +199,10 @@ window.addEventListener("scroll", () => {
       } else if (targetProgress >= mainAnimationEndProgress) {
         phase = "Between main and fade-out";
       }
-      
+
       console.log(`Scroll progress: ${targetProgress.toFixed(2)}, Phase: ${phase}`);
       console.log(`Main animation: ${mainAnimProgress.toFixed(1)}% complete`);
-      
+
       if (targetProgress > fadeOutStartProgress) {
         const visibilityFactor = 1.0 - ((targetProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress));
         console.log(`Fade-out visibility: ${visibilityFactor.toFixed(2)} (1 = visible, 0 = invisible)`);
@@ -195,7 +227,7 @@ document.addEventListener('keydown', (event) => {
   // Press 'F' to toggle mouse follower
   if (event.key.toLowerCase() === 'f') {
     mouseFollowerEnabled = !mouseFollowerEnabled;
-    
+
     // Show/hide the existing follower
     if (mouseFollower) {
       mouseFollower.visible = mouseFollowerEnabled;
@@ -595,83 +627,83 @@ const gridColors = new Float32Array(particlesCount * 3); // Add array for grid c
  */
 const gridSize = Math.ceil(Math.sqrt(particlesCount)); // Calculate grid dimensions
 for (let i = 0; i < particlesCount; i++) {
-    const i3 = i * 3;
-    
-    // Calculate grid positions
-    const row = Math.floor(i / gridSize);
-    const col = i % gridSize;
-    
-    // Convert grid coordinates to world space using density control parameters
-    const x = (col / gridSize - 0.5) * waveWidthFactor;
-    const z = (row / gridSize - 0.5) * waveDepthFactor;
-    
-    // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
-    // We need to do this before applying rotation to match initParticles
-    // Use the original Z value from grid calculation
-    const originalZ = z;
-    
-    // Normalize z position for color gradient - use the original Z
-    const minZ = -3.0; // Adjusted for original z values before rotation
-    const maxZ = 3.0;  // Adjusted for original z values before rotation
-    const normalizedZ = Math.min(1, Math.max(0, (originalZ - minZ) / (maxZ - minZ)));
-    
-    // Apply a stronger power curve to create more dramatic contrast
-    const enhancedZ = Math.pow(normalizedZ, 2.5);
-    
-    // Calculate color based on original z position
-    // For the outer 50% (normalizedZ < 0.5), blend towards black instead of just dark blue
-    let gridColor;
-    
-    if (normalizedZ < 0.5) {
-        // Outer 50% - blend between black and dark blue based on how far out we are
-        // Remap 0-0.5 range to 0-1 for blending
-        const fadeToBlack = 1.0 - (normalizedZ / 0.5);
-        
-        // Create a smooth transition between dark blue and black
-        gridColor = new THREE.Color().lerpColors(
-            new THREE.Color("#0452D5"),  // Dark blue
-            new THREE.Color("#000000"),  // Pure black
-            Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
-        );
-    } else {
-        // Inner 50% - normal gradient from dark blue to light blue
-        gridColor = new THREE.Color().lerpColors(
-            new THREE.Color("#0452D5"),  // Dark blue
-            new THREE.Color("#a9ddfb"),  // Light blue to match X shape
-            enhancedZ                    // Enhanced normalized distance value
-        );
-    }
-    
-    // Update grid color components
-    gridColors[i3] = gridColor.r;
-    gridColors[i3 + 1] = gridColor.g;
-    gridColors[i3 + 2] = gridColor.b;
-    
-    // Create a U-shaped wave effect (static, no animation)
-    const parabolicFactor = 0.25;
-    const baseSineWave = Math.sin(x * Math.PI - Math.PI/2) * 0.18;
-    const uShapeComponent = parabolicFactor * (x * x * 2.0);
-    
-    // Combine the components for static shape
-    const y = baseSineWave + uShapeComponent + z * 0.15;
+  const i3 = i * 3;
 
-    // Apply rotation around Y-axis
-    const rotationAngle = -16 * (Math.PI / 180);
-    const cosY = Math.cos(rotationAngle);
-    const sinY = Math.sin(rotationAngle);
-    
-    // Apply Y-axis rotation to x and z coordinates
-    const rotatedX = x * cosY - (z + waveZOffset) * sinY;
-    const rotatedZ = x * sinY + (z + waveZOffset) * cosY;
-    
-    // Store position with rotation applied
-    positions[i3] = rotatedX;
-    positions[i3 + 1] = y - 0.2;
-    positions[i3 + 2] = rotatedZ;
-    
-    // Set particle size based on color gradient (enhancedZ) - similar to X shape sizing
-    // Particles with lighter colors (higher Z) will be larger, darker ones smaller
-    particleSizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
+  // Calculate grid positions
+  const row = Math.floor(i / gridSize);
+  const col = i % gridSize;
+
+  // Convert grid coordinates to world space using density control parameters
+  const x = (col / gridSize - 0.5) * waveWidthFactor;
+  const z = (row / gridSize - 0.5) * waveDepthFactor;
+
+  // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
+  // We need to do this before applying rotation to match initParticles
+  // Use the original Z value from grid calculation
+  const originalZ = z;
+
+  // Normalize z position for color gradient - use the original Z
+  const minZ = -3.0; // Adjusted for original z values before rotation
+  const maxZ = 3.0;  // Adjusted for original z values before rotation
+  const normalizedZ = Math.min(1, Math.max(0, (originalZ - minZ) / (maxZ - minZ)));
+
+  // Apply a stronger power curve to create more dramatic contrast
+  const enhancedZ = Math.pow(normalizedZ, 2.5);
+
+  // Calculate color based on original z position
+  // For the outer 50% (normalizedZ < 0.5), blend towards black instead of just dark blue
+  let gridColor;
+
+  if (normalizedZ < 0.5) {
+    // Outer 50% - blend between black and dark blue based on how far out we are
+    // Remap 0-0.5 range to 0-1 for blending
+    const fadeToBlack = 1.0 - (normalizedZ / 0.5);
+
+    // Create a smooth transition between dark blue and black
+    gridColor = new THREE.Color().lerpColors(
+      new THREE.Color("#0452D5"),  // Dark blue
+      new THREE.Color("#000000"),  // Pure black
+      Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
+    );
+  } else {
+    // Inner 50% - normal gradient from dark blue to light blue
+    gridColor = new THREE.Color().lerpColors(
+      new THREE.Color("#0452D5"),  // Dark blue
+      new THREE.Color("#a9ddfb"),  // Light blue to match X shape
+      enhancedZ                    // Enhanced normalized distance value
+    );
+  }
+
+  // Update grid color components
+  gridColors[i3] = gridColor.r;
+  gridColors[i3 + 1] = gridColor.g;
+  gridColors[i3 + 2] = gridColor.b;
+
+  // Create a U-shaped wave effect (static, no animation)
+  const parabolicFactor = 0.25;
+  const baseSineWave = Math.sin(x * Math.PI - Math.PI / 2) * 0.18;
+  const uShapeComponent = parabolicFactor * (x * x * 2.0);
+
+  // Combine the components for static shape
+  const y = baseSineWave + uShapeComponent + z * 0.15;
+
+  // Apply rotation around Y-axis
+  const rotationAngle = -16 * (Math.PI / 180);
+  const cosY = Math.cos(rotationAngle);
+  const sinY = Math.sin(rotationAngle);
+
+  // Apply Y-axis rotation to x and z coordinates
+  const rotatedX = x * cosY - (z + waveZOffset) * sinY;
+  const rotatedZ = x * sinY + (z + waveZOffset) * cosY;
+
+  // Store position with rotation applied
+  positions[i3] = rotatedX;
+  positions[i3 + 1] = y - 0.2;
+  positions[i3 + 2] = rotatedZ;
+
+  // Set particle size based on color gradient (enhancedZ) - similar to X shape sizing
+  // Particles with lighter colors (higher Z) will be larger, darker ones smaller
+  particleSizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
 }
 
 /**
@@ -727,32 +759,32 @@ function initParticles() {
     let targetX = xShape.array[i3];
     let targetY = xShape.array[i3 + 1];
     let targetZ = xShape.array[i3 + 2];
-    
+
     // DETERMINE FRONT/BACK/SIDE BASED ON PRE-ROTATION POSITIONS
     // Using more precise thresholds to identify front, side and back regions
     const isFront = targetZ > 0.1; // Clear front-facing particles
     const isBack = targetZ < -0.1; // Clear back-facing particles
     const isSide = !isFront && !isBack; // Side particles
-    
+
     // Apply a slight rotation to the X model to match the reference images
     // Rotate around Y axis by about 15 degrees
     const angleY = Math.PI * 0.15; // Increased Y rotation
     const cosY = Math.cos(angleY);
     const sinY = Math.sin(angleY);
-    
+
     // Rotate around X axis by about 10 degrees
     const angleX = Math.PI * 0.03; // Decreased X rotation
     const cosX = Math.cos(angleX);
     const sinX = Math.sin(angleX);
-    
+
     // Apply Y-axis rotation
     const rotatedX = targetX * cosY - targetZ * sinY;
     const rotatedZ = targetX * sinY + targetZ * cosY;
-    
+
     // Apply X-axis rotation to the result
     const finalY = targetY * cosX + rotatedZ * sinX;
     const finalZ = -targetY * sinX + rotatedZ * cosX;
-    
+
     // Store rotated target positions
     adjustedTargetPositions[i3] = rotatedX;
     adjustedTargetPositions[i3 + 1] = finalY;
@@ -761,90 +793,90 @@ function initParticles() {
     // POSITION ANALYSIS - Determine regions of the X shape
     // Calculate distance from center in XY plane (for corner detection)
     const distFromCenterXY = Math.sqrt(rotatedX * rotatedX + finalY * finalY);
-    
+
     // Normalize the distance for gradient calculation (0 = center, 1 = far edge)
     // Using a smaller divisor to create a more compressed gradient (faster transition)
     const normalizedDist = Math.min(distFromCenterXY / 0.5, 1.0);
-    
+
     // SIZE CALCULATION BASED ON POSITION
     // More dramatic size difference between center and edges
-    const particleSize = isFront ? 
-                        (0.8 + (normalizedDist * 0.5) + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
-                        (0.7 + (Math.random() * 0.1)); // Back: Smaller than before
-    
+    const particleSize = isFront ?
+      (0.8 + (normalizedDist * 0.5) + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
+      (0.7 + (Math.random() * 0.1)); // Back: Smaller than before
+
     // Store X shape sizes separately from grid sizes
     adjustedTargetSizes[i] = particleSize;
-    
+
     // COLOR CALCULATION - GRADIENT FOR FRONT FACE
     // Apply color based on position
     let color;
-    
+
     if (isBack) {
-        // Back side: Always dark blue
-        color = darkBlue.clone();
+      // Back side: Always dark blue
+      color = darkBlue.clone();
     } else if (isFront) {
-        // Front side: Gradient from dark center to light corners
-        // Apply a contrast-enhancing function for more dramatic transition
-        
-        // Create an S-curve with steeper middle section
-        // This creates a darker center with a more sudden transition to light colors
-        let enhancedGradient;
-        
-        if (normalizedDist < 0.3) {
-            // Dark center area (inner 30%)
-            enhancedGradient = normalizedDist * 0.3; // Even darker center
-        } else if (normalizedDist < 0.5) {
-            // Transition area (30-50% from center)
-            // Rapid transition from dark to light in this range
-            const transitionPos = (normalizedDist - 0.3) / 0.2; // 0-1 in this range
-            enhancedGradient = 0.09 + transitionPos * 0.71; // 0.09-0.8 steeper curve
-        } else {
-            // Outer area (beyond 50% from center)
-            // Mostly light blue with subtle gradient to pure light at edges
-            enhancedGradient = 0.8 + (normalizedDist - 0.5) * 0.4; // 0.8-1.0 gentle slope
-        }
-        
-        color = new THREE.Color().lerpColors(
-            darkBlue,  // Center color
-            lightBlue, // Edge color
-            enhancedGradient  // S-curve transition for more dramatic contrast
-        );
+      // Front side: Gradient from dark center to light corners
+      // Apply a contrast-enhancing function for more dramatic transition
+
+      // Create an S-curve with steeper middle section
+      // This creates a darker center with a more sudden transition to light colors
+      let enhancedGradient;
+
+      if (normalizedDist < 0.3) {
+        // Dark center area (inner 30%)
+        enhancedGradient = normalizedDist * 0.3; // Even darker center
+      } else if (normalizedDist < 0.5) {
+        // Transition area (30-50% from center)
+        // Rapid transition from dark to light in this range
+        const transitionPos = (normalizedDist - 0.3) / 0.2; // 0-1 in this range
+        enhancedGradient = 0.09 + transitionPos * 0.71; // 0.09-0.8 steeper curve
+      } else {
+        // Outer area (beyond 50% from center)
+        // Mostly light blue with subtle gradient to pure light at edges
+        enhancedGradient = 0.8 + (normalizedDist - 0.5) * 0.4; // 0.8-1.0 gentle slope
+      }
+
+      color = new THREE.Color().lerpColors(
+        darkBlue,  // Center color
+        lightBlue, // Edge color
+        enhancedGradient  // S-curve transition for more dramatic contrast
+      );
     } else {
-        // Side surfaces: Gradient based on Z position
-        // Normalize Z position for color gradient (0 = back, 1 = front)
-        const zPos = targetZ; // Original Z value from GLB model
-        
-        // Create normalized value from -0.1 to 0.1 range to 0 to 1 range
-        const normalizedZPos = (zPos + 0.1) / 0.2;
-        
-        // Calculate side gradient - transitions from light to dark from front to back
-        // Also include the XY distance to match with the front face gradient
-        let sideGradient;
-        
-        if (normalizedDist > 0.5) {
-            // For edges of the X, use gradient based on both Z and XY distance
-            // This ensures side color near light front regions is also light
-            const xyFactor = (normalizedDist - 0.5) * 2; // 0-1 for outer half
-            
-            // Dramatically increase the effect - make front-facing sides much lighter
-            // and back-facing sides much darker
-            sideGradient = Math.pow(normalizedZPos, 0.5) * (0.6 + xyFactor * 0.4); // 0.6-1.0 range for edges
-        } else {
-            // For parts closer to center, still increase the effect but keep darker overall
-            // Use power function to create stronger contrast
-            sideGradient = Math.pow(normalizedZPos, 0.7) * 0.5; // 0-0.5 range (still darker for center)
-        }
-        
-        // Boost the overall side gradient to ensure front sides are clearly light
-        sideGradient = Math.max(sideGradient, normalizedZPos * 0.8);
-        
-        color = new THREE.Color().lerpColors(
-            darkBlue,  // Dark for back-facing sides
-            lightBlue, // Light for front-facing sides
-            sideGradient // Z-based gradient for smooth transition
-        );
+      // Side surfaces: Gradient based on Z position
+      // Normalize Z position for color gradient (0 = back, 1 = front)
+      const zPos = targetZ; // Original Z value from GLB model
+
+      // Create normalized value from -0.1 to 0.1 range to 0 to 1 range
+      const normalizedZPos = (zPos + 0.1) / 0.2;
+
+      // Calculate side gradient - transitions from light to dark from front to back
+      // Also include the XY distance to match with the front face gradient
+      let sideGradient;
+
+      if (normalizedDist > 0.5) {
+        // For edges of the X, use gradient based on both Z and XY distance
+        // This ensures side color near light front regions is also light
+        const xyFactor = (normalizedDist - 0.5) * 2; // 0-1 for outer half
+
+        // Dramatically increase the effect - make front-facing sides much lighter
+        // and back-facing sides much darker
+        sideGradient = Math.pow(normalizedZPos, 0.5) * (0.6 + xyFactor * 0.4); // 0.6-1.0 range for edges
+      } else {
+        // For parts closer to center, still increase the effect but keep darker overall
+        // Use power function to create stronger contrast
+        sideGradient = Math.pow(normalizedZPos, 0.7) * 0.5; // 0-0.5 range (still darker for center)
+      }
+
+      // Boost the overall side gradient to ensure front sides are clearly light
+      sideGradient = Math.max(sideGradient, normalizedZPos * 0.8);
+
+      color = new THREE.Color().lerpColors(
+        darkBlue,  // Dark for back-facing sides
+        lightBlue, // Light for front-facing sides
+        sideGradient // Z-based gradient for smooth transition
+      );
     }
-    
+
     // Store color components
     colors[i3] = color.r;
     colors[i3 + 1] = color.g;
@@ -857,7 +889,7 @@ function initParticles() {
   geometry.setAttribute("aSize", new THREE.BufferAttribute(adjustedSizes, 1));
   geometry.setAttribute("aTargetSize", new THREE.BufferAttribute(adjustedTargetSizes, 1)); // Add X shape sizes
   geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
-  
+
   // Create a properly sized copy of the global gridColors for this geometry
   const adjustedGridColors = new Float32Array(adjustedCount * 3);
   for (let i = 0; i < adjustedCount * 3; i++) {
@@ -871,7 +903,7 @@ function initParticles() {
     fragmentShader,
     uniforms: {
       uSize: { value: 0.026 }, // Base size multiplier
-      uProgress: { value: 0.0 }, 
+      uProgress: { value: 0.0 },
       uBlendTransition: { value: 0.0 }, // Blend transition uniform
       uTime: { value: 0.0 }, // Time uniform for wave animation
       uResolution: {
@@ -908,13 +940,13 @@ function initParticles() {
   // Create and add points mesh to scene
   particles = new THREE.Points(geometry, material);
   particles.geometry.setIndex(null);
-  
+
   // Add a slight scale adjustment to make the X shape more distinctive
   particles.scale.set(1.1, 1.0, 1.0);
-  
+
   // Set renderOrder to ensure proper transparency handling
   particles.renderOrder = 0;
-  
+
   scene.add(particles);
 }
 
@@ -924,44 +956,44 @@ function initParticles() {
 function animate() {
   // Request the next frame
   requestAnimationFrame(animate);
-  
+
   // Smooth scroll progress interpolation
   currentProgress += (targetProgress - currentProgress) * scrollEasing;
-  
+
   // Update particle animation progress with smoothed value
   if (particles) {
     // Calculate the main animation progress (0-1 from start to mainAnimationEndProgress)
     // This ensures the main animation runs at a consistent pace regardless of fadeOutStartProgress
     const mainProgress = Math.min(1.0, currentProgress / mainAnimationEndProgress);
     particles.material.uniforms.uProgress.value = mainProgress;
-    
+
     // Calculate fade-out progress
     // Only start fading out after the main animation has completed (after mainAnimationEndProgress)
     let fadeOutProgress = 1.0; // Default: fully visible
-    
+
     if (currentProgress > fadeOutStartProgress) {
       // Map fadeOutStartProgress-100% to 1-0 range for fade-out (1 = visible, 0 = invisible)
       fadeOutProgress = 1.0 - ((currentProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress));
-      
+
       // Add a smooth curve to make the fade-out more natural
       fadeOutProgress = fadeOutProgress * fadeOutProgress; // Simple quadratic easing
-      
+
       // Add debug logging to verify fade-out is happening
       if (Math.random() < 0.005) { // Reduced logging frequency
         console.log(`Fade-out active: ${(1.0 - fadeOutProgress).toFixed(3)}, visibility: ${fadeOutProgress.toFixed(3)}`);
       }
     }
-    
+
     // Update the uniform value
     particles.material.uniforms.uFadeOutProgress.value = fadeOutProgress;
-    
+
     // Calculate blend transition from additive to normal blending using main progress
     const blendProgress = Math.max(0, Math.min(1, (mainProgress - 0.4) / 0.3));
-    
+
     // Apply smoothstep easing to the blend transition for better smoothing
     const smoothBlendProgress = blendProgress * blendProgress * (3 - 2 * blendProgress);
     particles.material.uniforms.uBlendTransition.value = smoothBlendProgress;
-    
+
     // Create a wider transition window for blending mode switches (50%-60% instead of exactly 50%)
     // This staggers the changes to avoid all changes happening at once
     if (blendProgress > 0.6 && particles.material.blending === THREE.AdditiveBlending) {
@@ -973,7 +1005,7 @@ function animate() {
       particles.material.blending = THREE.AdditiveBlending;
       particles.material.needsUpdate = true; // Important: update material after changing blending
     }
-    
+
     // Handle depth writing separately with a slightly different threshold
     // This staggers the changes to avoid everything happening at once
     if (blendProgress > 0.55 && particles.material.depthWrite === false) {
@@ -983,20 +1015,20 @@ function animate() {
       particles.material.depthWrite = false; // Disable depth writing
       particles.material.needsUpdate = true;
     }
-    
+
     // Create a smoother easing with a blend between the two phases
     let easedProgress;
-    
+
     // Apply a gradual rotation that builds up throughout the scroll
     if (mainProgress >= 0.6) { // Start rotation at 60% of main progress (after wave transition completes)
       // Normalize progress to 0-1 range for the Y rotation animation (60%-100%)
       const normalizedProgress = (mainProgress - 0.6) / 0.4;
-      
+
       let yEasedProgress;
-      
+
       // Store phase1Progress for reuse
       const phase1Progress = mainProgress < 0.8 ? (mainProgress - 0.6) / 0.2 : 1.0; // 0-1 within phase 1
-      
+
       if (mainProgress < 0.8) {
         // Use a gentler cubic ease-out for slower buildup
         // This curve will reach 0.5 (10 degrees) at the end of phase 1
@@ -1004,33 +1036,33 @@ function animate() {
       } else {
         // Phase 2: Normalize to 0-1 range for 80-100% scroll
         const phase2Progress = (mainProgress - 0.8) / 0.2; // 0-1 within phase 2
-        
+
         // Start from 0.5 (10 degrees) and build to 1.0 (20 degrees)
         // Use a smooth quadratic curve for acceleration
         yEasedProgress = 0.5 + 0.5 * Math.pow(phase2Progress, 2);
       }
-      
+
       // Ensure we don't exceed 1.0 due to floating-point errors
       easedProgress = Math.min(1.0, Math.max(0, yEasedProgress));
-      
+
       // Calculate X rotation that starts at 80% scroll and reaches 5 degrees at 100%
       let xRotationProgress = 0;
       if (mainProgress >= 0.8) {
         // Normalize to 0-1 range for 80-100% scroll
         const xNormalizedProgress = (mainProgress - 0.8) / 0.2;
-        
+
         // Use a cubic ease-in for smooth start of X rotation
         xRotationProgress = Math.pow(xNormalizedProgress, 3);
-        
+
         // Ensure smooth transition by blending with main curve
         xRotationProgress = Math.min(1.0, Math.max(0, xRotationProgress));
       }
-      
+
       // Calculate max rotation values
       const maxRotationX = -5 * (Math.PI / 180); // 5 degrees in radians
       const maxRotationY = 20 * (Math.PI / 180); // 20 degrees in radians
       const maxRotationZ = 0; // Keep Z rotation at 0
-      
+
       // Apply gradual rotation
       particles.rotation.x = maxRotationX * xRotationProgress; // X rotation starts at 80%
       particles.rotation.y = maxRotationY * easedProgress; // Y rotation with main easing curve
@@ -1042,38 +1074,38 @@ function animate() {
       particles.rotation.z = 0;
     }
   }
-  
+
   // Update time-based animations
   const elapsedTime = performance.now() / 1000; // Convert to seconds
-  
+
   // Update shader uniforms
   if (particles && particles.material.uniforms.uTime) {
     particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
-    
+
     // Update disruption effect uniforms - always false
     particles.material.uniforms.uDisruptionEnabled.value = false; // Force this to false
     // No need to update other disruption-related values since it's disabled
   }
-  
+
   // Smooth mouse movement
   mouseX += (targetMouseX - mouseX) * 0.05;
   mouseY += (targetMouseY - mouseY) * 0.05;
-  
+
   // Apply subtle camera movement based on mouse position
   if (camera) {
     // Starting position
     const baseX = 0.8;
     const baseY = 0.2;
     const baseZ = 3.5;
-    
+
     // Create subtle movement (adjust these values to change sensitivity)
     const offsetX = mouseX * 0.15;
     const offsetY = -mouseY * 0.10;
-    
+
     // Apply to camera position
     camera.position.x = baseX + offsetX;
     camera.position.y = baseY + offsetY;
-    
+
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
 
@@ -1082,32 +1114,32 @@ function animate() {
     if (mouseFollowerEnabled && mouseFollower) {
       // Create a raycaster to get exact 3D position from mouse coordinates
       const raycaster = new THREE.Raycaster();
-      
+
       // Use the current smoothed mouse position
       // Negate the Y value to correct for coordinate system differences
       const mousePosition = new THREE.Vector2(mouseX, -mouseY);
-      
+
       // Update the raycaster with the mouse position and camera
       raycaster.setFromCamera(mousePosition, camera);
-      
+
       // Calculate the point in 3D space at the specified depth
       // This gives us precise positioning regardless of camera angle/position
       const targetZ = mouseFollowerDepth;
       const distance = (targetZ - camera.position.z) / raycaster.ray.direction.z;
-      
+
       // Calculate the exact point in 3D space where the ray intersects the z-plane
       const targetPosition = new THREE.Vector3().copy(camera.position)
         .add(raycaster.ray.direction.multiplyScalar(distance));
-      
+
       // Update the follower position
       mouseFollower.position.x = targetPosition.x;
       mouseFollower.position.y = targetPosition.y;
       mouseFollower.position.z = targetZ; // Keep z position constant
-      
+
       // Don't update mouse world position since disruption is disabled
     }
   }
-  
+
   // Render the scene
   renderer.render(scene, camera);
 }
@@ -1120,10 +1152,10 @@ animate();
  */
 function createMouseFollower() {
   if (!mouseFollowerEnabled) return;
-  
+
   // Create a circle geometry
   const geometry = new THREE.CircleGeometry(mouseFollowerSize, 32);
-  
+
   // Create a material with transparency
   const material = new THREE.MeshBasicMaterial({
     color: mouseFollowerColor,
@@ -1132,14 +1164,14 @@ function createMouseFollower() {
     side: THREE.DoubleSide,
     depthWrite: false, // Prevents the circle from interfering with depth buffer
   });
-  
+
   // Create the mesh and add it to the scene
   mouseFollower = new THREE.Mesh(geometry, material);
-  
+
   // Position it in front of other elements
   mouseFollower.position.z = mouseFollowerDepth;
   mouseFollower.renderOrder = 999; // Ensure it renders on top
-  
+
   scene.add(mouseFollower);
 }
 
@@ -1157,7 +1189,7 @@ function updateWaveOffsets(x, y, z) {
   waveOffsetX = x;
   waveOffsetY = y;
   waveOffsetZ = z;
-  
+
   // Update shader uniforms if particles exist
   if (particles) {
     particles.material.uniforms.uWaveOffsetX.value = x;
@@ -1177,7 +1209,7 @@ function updateWaveRotations(x, y, z) {
   waveRotationX = x;
   waveRotationY = y;
   waveRotationZ = z;
-  
+
   // Update shader uniforms if particles exist
   if (particles) {
     particles.material.uniforms.uWaveRotationX.value = x;
@@ -1197,7 +1229,7 @@ function updateDarknessParams(distance, height, distantHeight) {
   distanceDarknessFactor = distance;
   heightDarknessFactor = height;
   distantHeightBoost = distantHeight;
-  
+
   // Update shader uniforms if particles exist
   if (particles) {
     particles.material.uniforms.uDistanceDarknessFactor.value = distance;
@@ -1225,7 +1257,7 @@ function updateWaveDensity(width, depth, zOffset) {
   waveWidthFactor = Math.max(0.5, width); // Ensure minimum width
   waveDepthFactor = Math.max(1.0, depth); // Ensure minimum depth
   waveZOffset = Math.max(0.0, zOffset); // Ensure non-negative z-offset
-  
+
   // Regenerate particles with new density parameters
   regenerateParticles();
 }
@@ -1236,13 +1268,13 @@ function updateWaveDensity(width, depth, zOffset) {
  */
 function regenerateParticles() {
   if (!particles) return; // Skip if particles don't exist yet
-  
+
   // Store current progress and material properties
   const currentProgress = particles.material.uniforms.uProgress.value;
   const currentBlendTransition = particles.material.uniforms.uBlendTransition.value;
   const currentBlending = particles.material.blending;
   const currentDepthWrite = particles.material.depthWrite;
-  
+
   // Get existing geometry and attributes
   const geometry = particles.geometry;
   const positionAttribute = geometry.getAttribute('position');
@@ -1251,76 +1283,76 @@ function regenerateParticles() {
   const gridColors = gridColorAttribute.array;
   const sizeAttribute = geometry.getAttribute('aSize'); // These are the grid sizes, not X shape sizes
   const sizes = sizeAttribute.array;
-  
+
   // Define color palette for recalculation
   const darkBlue = new THREE.Color("#0452D5");
   const lightBlue = new THREE.Color("#63BEF4");
-  
+
   // Recalculate positions with new wave density parameters
   const gridSize = Math.ceil(Math.sqrt(positions.length / 3));
-  
+
   for (let i = 0; i < positions.length / 3; i++) {
     const i3 = i * 3;
-    
+
     // Calculate grid positions
     const row = Math.floor(i / gridSize);
     const col = i % gridSize;
-    
+
     // Convert grid coordinates to world space using density control parameters
     const x = (col / gridSize - 0.5) * waveWidthFactor;
     const z = (row / gridSize - 0.5) * waveDepthFactor;
-    
+
     // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
     // We need to do this before applying rotation to match initParticles
     // Use the original Z value from grid calculation
     const originalZ = z;
-    
+
     // Normalize z position for color gradient - use the original Z
     const minZ = -3.0; // Adjusted for original z values before rotation
     const maxZ = 3.0;  // Adjusted for original z values before rotation
     const normalizedZ = Math.min(1, Math.max(0, (originalZ - minZ) / (maxZ - minZ)));
-    
+
     // Apply a stronger power curve to create more dramatic contrast
     const enhancedZ = Math.pow(normalizedZ, 2.5);
-    
+
     // Calculate color based on original z position
     // For the outer 50% (normalizedZ < 0.5), blend towards black instead of just dark blue
     let gridColor;
-    
+
     if (normalizedZ < 0.5) {
-        // Outer 50% - blend between black and dark blue based on how far out we are
-        // Remap 0-0.5 range to 0-1 for blending
-        const fadeToBlack = 1.0 - (normalizedZ / 0.5);
-        
-        // Create a smooth transition between dark blue and black
-        gridColor = new THREE.Color().lerpColors(
-            new THREE.Color("#0452D5"),  // Dark blue
-            new THREE.Color("#000000"),  // Pure black
-            Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
-        );
+      // Outer 50% - blend between black and dark blue based on how far out we are
+      // Remap 0-0.5 range to 0-1 for blending
+      const fadeToBlack = 1.0 - (normalizedZ / 0.5);
+
+      // Create a smooth transition between dark blue and black
+      gridColor = new THREE.Color().lerpColors(
+        new THREE.Color("#0452D5"),  // Dark blue
+        new THREE.Color("#000000"),  // Pure black
+        Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
+      );
     } else {
-        // Inner 50% - normal gradient from dark blue to light blue
-        gridColor = new THREE.Color().lerpColors(
-            new THREE.Color("#0452D5"),  // Dark blue
-            new THREE.Color("#63BEF4"),  // Light blue to match X shape
-            enhancedZ                    // Enhanced normalized distance value
-        );
+      // Inner 50% - normal gradient from dark blue to light blue
+      gridColor = new THREE.Color().lerpColors(
+        new THREE.Color("#0452D5"),  // Dark blue
+        new THREE.Color("#63BEF4"),  // Light blue to match X shape
+        enhancedZ                    // Enhanced normalized distance value
+      );
     }
-    
+
     // Update grid color components
     gridColors[i3] = gridColor.r;
     gridColors[i3 + 1] = gridColor.g;
     gridColors[i3 + 2] = gridColor.b;
-    
+
     // Only modify the grid sizes (aSize), not the X shape sizes (aTargetSize)
     // This ensures X shape sizes remain intact during transitions
     sizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
-    
+
     // Create a U-shaped wave effect (static, no animation)
     const parabolicFactor = 0.25;
-    const baseSineWave = Math.sin(x * Math.PI - Math.PI/2) * 0.18;
+    const baseSineWave = Math.sin(x * Math.PI - Math.PI / 2) * 0.18;
     const uShapeComponent = parabolicFactor * (x * x * 2.0);
-    
+
     // Combine the components for static shape
     const y = baseSineWave + uShapeComponent + z * 0.15;
 
@@ -1328,22 +1360,22 @@ function regenerateParticles() {
     const rotationAngle = -16 * (Math.PI / 180);
     const cosY = Math.cos(rotationAngle);
     const sinY = Math.sin(rotationAngle);
-    
+
     // Apply Y-axis rotation to x and z coordinates
     const rotatedX = x * cosY - (z + waveZOffset) * sinY;
     const rotatedZ = x * sinY + (z + waveZOffset) * cosY;
-    
+
     // Store position with rotation applied
     positions[i3] = rotatedX;
     positions[i3 + 1] = y - 0.2;
     positions[i3 + 2] = rotatedZ;
   }
-  
+
   // Update the position, color, and size attributes
   positionAttribute.needsUpdate = true;
   gridColorAttribute.needsUpdate = true;
   sizeAttribute.needsUpdate = true;
-  
+
   // Restore animation state
   particles.material.uniforms.uProgress.value = currentProgress;
   particles.material.uniforms.uBlendTransition.value = currentBlendTransition;
