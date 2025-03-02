@@ -1,8 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-
-
 // Global configuration
 const waveSpeed = 1; // Set to 0 to disable wave animations
 let waveOffsetX = -0.35; // Master X offset value
@@ -17,37 +15,12 @@ let distanceDarknessFactor = 0.80; // Controls how much particles darken based o
 let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
-// Debug flags
-let debugMode = false; // Global flag to enable/disable debug mode
-let debugFrontPosition = new THREE.Vector3(0, 0, 0); // Track front-most position
-let debugBackPosition = new THREE.Vector3(0, 0, 0); // Track back-most position
-let debugLeftPosition = new THREE.Vector3(0, 0, 0); // Track left-most position 
-let debugRightPosition = new THREE.Vector3(0, 0, 0); // Track right-most position
-let debugHighestPosition = new THREE.Vector3(0, 0, 0); // Track highest position
-let debugLowestPosition = new THREE.Vector3(0, 0, 0); // Track lowest position
-
 // Wave density controls - these parameters affect how the particles are arranged
 let waveWidthFactor = 1.5; // Width of the wave pattern (X-axis spread)
 let waveDepthFactor = 6.0; // Depth of the wave pattern (Z-axis spread)
 let waveZOffset = 1.8; // Z-offset for the wave centered positioning
 
-// Display offset values (for UI showing relative changes from baseline)
-let displayOffsetX = 0.10; // Updated to match specified position X value
-let displayOffsetY = 0.20; // Updated to match specified position Y value
-let displayOffsetZ = 0.00; // Updated to match specified position Z value
-let displayRotationX = 0.0;
-let displayRotationY = 0.0;
-let displayRotationZ = 0.0;
 
-// Original zero values stored for reset functionality
-const originalOffsets = {
-  x: 0.0,
-  y: 0.0,
-  z: 0.0,
-  rotX: 0.0,
-  rotY: 0.0,
-  rotZ: 0.0
-};
 
 // Apply initial wave property values when page loads
 window.addEventListener("DOMContentLoaded", () => {
@@ -57,27 +30,9 @@ window.addEventListener("DOMContentLoaded", () => {
     updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
     updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
     updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
-    
-    // Update display offset values based on the master values
-    // We're calculating these based on the difference from our baseline values
-    calculateDisplayOffsets();
-    
-    // Update debug display to show the specified values
-    updateDebugDisplay();
   }, 100); // Small delay to ensure the particle system is initialized
 });
 
-// Add a new function to calculate display offsets from master values
-function calculateDisplayOffsets() {
-  // Display offsets are calculated relative to our baseline values
-  // These values will show how much we've moved from the original configuration
-  displayOffsetX = waveOffsetX - (-0.75);
-  displayOffsetY = waveOffsetY - (-0.25);
-  displayOffsetZ = waveOffsetZ - (-3.20);
-  displayRotationX = waveRotationX - (-5.73 * (Math.PI / 180));
-  displayRotationY = waveRotationY - (5.73 * (Math.PI / 180));
-  displayRotationZ = waveRotationZ - 0.0;
-}
 
 /**
  * Shaders
@@ -407,125 +362,8 @@ camera.position.set(0.8, 0.2, 3.5);
 // Set camera to look at the origin (0,0,0) - same target point that OrbitControls was using
 camera.lookAt(0, 0, 0);
 
-// Add camera helper (initially hidden) to visualize camera frustum
-const cameraHelper = new THREE.CameraHelper(camera);
-cameraHelper.visible = false; // Hidden by default
-scene.add(cameraHelper);
-
 // Toggle camera helper visibility with 'H' key
-window.addEventListener("keydown", (event) => {
-  if (event.key === "h" || event.key === "H") {
-    cameraHelper.visible = !cameraHelper.visible;
-    updateDebugDisplay();
-  }
-
-  // Darkness effect controls
-  const darknessStep = 0.05; // Amount to change darkness parameters with each key press
-  
-  // Distance darkness controls (keys 1/2)
-  if (event.key === "1") {
-    updateDarknessParams(Math.max(0, distanceDarknessFactor - darknessStep), heightDarknessFactor, distantHeightBoost);
-    console.log("Decreased distance darkness");
-  } else if (event.key === "2") {
-    updateDarknessParams(Math.min(1.0, distanceDarknessFactor + darknessStep), heightDarknessFactor, distantHeightBoost);
-    console.log("Increased distance darkness");
-  }
-  
-  // Height darkness controls (keys 3/4)
-  if (event.key === "3") {
-    updateDarknessParams(distanceDarknessFactor, Math.max(0, heightDarknessFactor - darknessStep*2), distantHeightBoost);
-    console.log("Decreased height darkness");
-  } else if (event.key === "4") {
-    updateDarknessParams(distanceDarknessFactor, Math.min(2.0, heightDarknessFactor + darknessStep*2), distantHeightBoost);
-    console.log("Increased height darkness");
-  }
-  
-  // Distant height boost controls (keys 5/6)
-  if (event.key === "5") {
-    updateDarknessParams(distanceDarknessFactor, heightDarknessFactor, Math.max(0, distantHeightBoost - darknessStep*2));
-    console.log("Decreased distant height boost");
-  } else if (event.key === "6") {
-    updateDarknessParams(distanceDarknessFactor, heightDarknessFactor, Math.min(2.0, distantHeightBoost + darknessStep*2));
-    console.log("Increased distant height boost");
-  }
-
-  // Wave offset controls
-  const offsetStep = 0.05; // Amount to change offsets with each key press
-
-  // X offset controls (A/D)
-  if (event.key === "a" || event.key === "A") {
-    updateWaveOffsets(waveOffsetX - offsetStep, waveOffsetY, waveOffsetZ);
-    console.log("Decreased X offset");
-  } else if (event.key === "d" || event.key === "D") {
-    updateWaveOffsets(waveOffsetX + offsetStep, waveOffsetY, waveOffsetZ);
-    console.log("Increased X offset");
-  }
-  
-  // Y offset controls (W/S)
-  if (event.key === "w" || event.key === "W") {
-    updateWaveOffsets(waveOffsetX, waveOffsetY + offsetStep, waveOffsetZ);
-    console.log("Increased Y offset");
-  } else if (event.key === "s" || event.key === "S") {
-    updateWaveOffsets(waveOffsetX, waveOffsetY - offsetStep, waveOffsetZ);
-    console.log("Decreased Y offset");
-  }
-  
-  // Z offset controls (Q/E)
-  if (event.key === "q" || event.key === "Q") {
-    updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ - offsetStep);
-    console.log("Decreased Z offset");
-  } else if (event.key === "e" || event.key === "E") {
-    updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ + offsetStep);
-    console.log("Increased Z offset");
-  }
-  
-  // Wave density control (using shift key + keyboard combinations)
-  const densityStep = 0.1; // Amount to change density parameters with each key press
-  
-  // Width factor controls (Shift + Left/Right Arrow)
-  if (event.shiftKey && event.key === "ArrowLeft") {
-    updateWaveDensity(waveWidthFactor - densityStep, waveDepthFactor, waveZOffset);
-    console.log("Decreased wave width");
-  } else if (event.shiftKey && event.key === "ArrowRight") {
-    updateWaveDensity(waveWidthFactor + densityStep, waveDepthFactor, waveZOffset);
-    console.log("Increased wave width");
-  }
-  
-  // Depth factor controls (Shift + Up/Down Arrow)
-  if (event.shiftKey && event.key === "ArrowUp") {
-    updateWaveDensity(waveWidthFactor, waveDepthFactor + densityStep, waveZOffset);
-    console.log("Increased wave depth");
-  } else if (event.shiftKey && event.key === "ArrowDown") {
-    updateWaveDensity(waveWidthFactor, waveDepthFactor - densityStep, waveZOffset);
-    console.log("Decreased wave depth");
-  }
-  
-  // Z-offset controls (Shift + PageUp/PageDown)
-  if (event.shiftKey && event.key === "PageUp") {
-    updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset + densityStep);
-    console.log("Increased wave Z offset");
-  } else if (event.shiftKey && event.key === "PageDown") {
-    updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset - densityStep);
-    console.log("Decreased wave Z offset");
-  }
-  
-  // Reset offsets to base values (R key)
-  if (event.key === "r" || event.key === "R") {
-    // Reset to our master values defined at the top of the file
-    updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
-    updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
-    updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
-    updateDarknessParams(0.30, 1.0, 1.2); // Reset to default darkness values
-    console.log("Reset all parameters to master values");
-  }
-  
-  // True zero reset (Z key)
-  if (event.key === "z" || event.key === "Z") {
-    updateWaveOffsets(0, 0, 0);
-    updateWaveRotations(0, 0, 0);
-    console.log("Reset wave parameters to true zero");
-  }
-});
+// Removing keyboard event listener for debug controls
 
 // Renderer configuration
 const renderer = new THREE.WebGLRenderer({
@@ -883,9 +721,6 @@ window.addEventListener("scroll", () => {
   const scrollPercentage = Math.round(progress);
   document.querySelector(".scrollProgress").textContent = `${scrollPercentage}%`;
   
-  // Update debug info using the centralized function
-  updateDebugDisplay();
-
   // Update particle animation progress (0-1)
   if (particles) {
     particles.material.uniforms.uProgress.value = progress / 100;
@@ -984,49 +819,26 @@ window.addEventListener("scroll", () => {
 });
 
 /**
- * Animation loop
- * Renders the scene on each frame
+ * Animation loop that updates every frame
  */
-let clock = new THREE.Clock();
 function animate() {
+  // Request the next frame
   requestAnimationFrame(animate);
-
-  // Update time for wave animation
-  const deltaTime = clock.getDelta();
-  if (particles && waveSpeed > 0) {
-    // Only update time if wave animation is enabled
-    particles.material.uniforms.uTime.value += deltaTime * waveSpeed;
+  
+  // Update time-based animations
+  const elapsedTime = performance.now() / 1000; // Convert to seconds
+  
+  // Update shader uniforms
+  if (particles && particles.material.uniforms.uTime) {
+    particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
   }
   
-  // Update camera helper if it's visible
-  if (cameraHelper.visible) {
-    cameraHelper.update();
-  }
-  
-  // Update debug info when in debug mode
-  if (debugMode) {
-    // Limit debug stats updates to once every 30 frames for performance
-    if (Math.floor(performance.now() / 100) % 3 === 0) {
-      requestAnimationFrame(() => {
-        captureVertexStats();
-        updateDarknessVisualizer(); // Add this line
-      });
-    }
-  } else {
-    // Hide visualizer when debug mode is off
-    const canvas = document.getElementById('darknessVisualizer');
-    if (canvas) canvas.style.display = 'none';
-  }
-
   // Render the scene
   renderer.render(scene, camera);
 }
 
 // Start animation loop
 animate();
-
-// Initialize debug display
-updateDebugDisplay();
 
 /**
  * Updates wave offset parameters and applies them to shader uniforms
@@ -1040,20 +852,12 @@ function updateWaveOffsets(x, y, z) {
   waveOffsetY = y;
   waveOffsetZ = z;
   
-  // Recalculate display offsets based on these new values
-  calculateDisplayOffsets();
-  
   // Update shader uniforms if particles exist
   if (particles) {
     particles.material.uniforms.uWaveOffsetX.value = x;
     particles.material.uniforms.uWaveOffsetY.value = y;
     particles.material.uniforms.uWaveOffsetZ.value = z;
   }
-  
-  console.log(`Wave offsets updated: X=${x}, Y=${y}, Z=${z}`);
-  
-  // Update debug display with new offset values
-  updateDebugDisplay();
 }
 
 /**
@@ -1063,11 +867,6 @@ function updateWaveOffsets(x, y, z) {
  * @param {number} z - Z rotation for the wave pattern (in radians)
  */
 function updateWaveRotations(x, y, z) {
-  // Calculate display rotations relative to base values (in radians)
-  displayRotationX = x - (-5.73 * (Math.PI / 180));
-  displayRotationY = y - (5.73 * (Math.PI / 180));
-  displayRotationZ = z - 0.0;
-  
   // Update global variables
   waveRotationX = x;
   waveRotationY = y;
@@ -1079,11 +878,6 @@ function updateWaveRotations(x, y, z) {
     particles.material.uniforms.uWaveRotationY.value = y;
     particles.material.uniforms.uWaveRotationZ.value = z;
   }
-  
-  console.log(`Wave rotations updated: X=${x}, Y=${y}, Z=${z}`);
-  
-  // Update debug display with new rotation values
-  updateDebugDisplay();
 }
 
 /**
@@ -1104,11 +898,6 @@ function updateDarknessParams(distance, height, distantHeight) {
     particles.material.uniforms.uHeightDarknessFactor.value = height;
     particles.material.uniforms.uDistantHeightBoost.value = distantHeight;
   }
-  
-  console.log(`Darkness params updated: Distance=${distance.toFixed(2)}, Height=${height.toFixed(2)}, Boost=${distantHeight.toFixed(2)}`);
-  
-  // Update debug display with new values
-  updateDebugDisplay();
 }
 
 /**
@@ -1116,112 +905,7 @@ function updateDarknessParams(distance, height, distantHeight) {
  * Shows scroll progress, rotation status, wave offset values, and camera information
  */
 function updateDebugDisplay() {
-  // Get current scroll progress
-  const progress = (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
-  const scrollProgressPrecise = progress.toFixed(1);
-  
-  // Format display offset values to 2 decimal places (these will start at 0)
-  const offsetX = displayOffsetX.toFixed(2);
-  const offsetY = displayOffsetY.toFixed(2);
-  const offsetZ = displayOffsetZ.toFixed(2);
-  
-  // Format actual offset values (not just display deltas)
-  const actualX = waveOffsetX.toFixed(2);
-  const actualY = waveOffsetY.toFixed(2);
-  const actualZ = waveOffsetZ.toFixed(2);
-  
-  // Format display rotation values to 2 decimal places (convert to degrees for display)
-  const rotOffsetX = (displayRotationX * 180 / Math.PI).toFixed(2);
-  const rotOffsetY = (displayRotationY * 180 / Math.PI).toFixed(2);
-  const rotOffsetZ = (displayRotationZ * 180 / Math.PI).toFixed(2);
-  
-  // Format wave density parameters
-  const widthFactor = waveWidthFactor.toFixed(2);
-  const depthFactor = waveDepthFactor.toFixed(2);
-  const zOffsetValue = waveZOffset.toFixed(2);
-  
-  // Format darkness parameters
-  const distanceDark = distanceDarknessFactor.toFixed(2);
-  const heightDark = heightDarknessFactor.toFixed(2);
-  const distantBoost = distantHeightBoost.toFixed(2);
-  
-  // Format camera parameters to 2 decimal places
-  const camPosX = camera.position.x.toFixed(2);
-  const camPosY = camera.position.y.toFixed(2);
-  const camPosZ = camera.position.z.toFixed(2);
-  
-  // Get camera rotation in degrees
-  const camRotX = (camera.rotation.x * 180 / Math.PI).toFixed(2);
-  const camRotY = (camera.rotation.y * 180 / Math.PI).toFixed(2);
-  const camRotZ = (camera.rotation.z * 180 / Math.PI).toFixed(2);
-  
-  // Calculate camera lookAt target based on camera's matrix
-  const lookAtVector = new THREE.Vector3(0, 0, -1);
-  lookAtVector.applyQuaternion(camera.quaternion);
-  const lookX = lookAtVector.x.toFixed(2);
-  const lookY = lookAtVector.y.toFixed(2);
-  const lookZ = lookAtVector.z.toFixed(2);
-  
-  // Camera helper status
-  const helperStatus = cameraHelper.visible ? "visible" : "hidden";
-  
-  // Controls reminder
-  const controlsInfo = `Controls: WASD/QE = move, R = reset, Z = zero`;
-  const densityControls = `Density: Shift+Arrows = width/depth, Shift+Page = Z-offset`;
-  const darknessControls = `Darkness: 1/2 = distance, 3/4 = height, 5/6 = boost`;
-  
-  if (progress >= 60 && particles) {
-    // When rotation is active (at 60% or higher), show rotation values and offsets
-    const rotX = (particles.rotation.x * 180 / Math.PI).toFixed(1);
-    const rotY = (particles.rotation.y * 180 / Math.PI).toFixed(1);
-    const rotZ = 0.0;
-    
-    document.querySelector(".scrollProgressPrecise").innerHTML = 
-      `Scroll: ${scrollProgressPrecise}% | Rotation: active<br>` +
-      `X: <span class="rot-x">${rotX}°</span> ` +
-      `Y: <span class="rot-y">${rotY}°</span> ` +
-      `Z: <span class="rot-z">${rotZ}°</span><br>` +
-      `Position: <span class="off-x">X=${offsetX}</span> ` +
-      `<span class="off-y">Y=${offsetY}</span> ` +
-      `<span class="off-z">Z=${offsetZ}</span><br>` +
-      `Actual: <span class="off-x">X=${actualX}</span> ` +
-      `<span class="off-y">Y=${actualY}</span> ` +
-      `<span class="off-z">Z=${actualZ}</span><br>` +
-      `Rotation: <span class="rot-x">X=${rotOffsetX}°</span> ` +
-      `<span class="rot-y">Y=${rotOffsetY}°</span> ` +
-      `<span class="rot-z">Z=${rotOffsetZ}°</span><br>` +
-      `Density: Width=${widthFactor}, Depth=${depthFactor}, Z-Offset=${zOffsetValue}<br>` +
-      `Darkness: Dist=${distanceDark}, Height=${heightDark}, Boost=${distantBoost}<br>` +
-      `${controlsInfo}<br>${densityControls}<br>${darknessControls}`;
-  } else {
-    // When rotation is not active (below 60%), only show offset values
-    document.querySelector(".scrollProgressPrecise").innerHTML = 
-      `Scroll: ${scrollProgressPrecise}% | Rotation: inactive<br>` +
-      `X: <span class="rot-x">0.0°</span> ` +
-      `Y: <span class="rot-y">0.0°</span> ` +
-      `Z: <span class="rot-z">0.0°</span><br>` +
-      `Position: <span class="off-x">X=${offsetX}</span> ` +
-      `<span class="off-y">Y=${offsetY}</span> ` +
-      `<span class="off-z">Z=${offsetZ}</span><br>` +
-      `Actual: <span class="off-x">X=${actualX}</span> ` +
-      `<span class="off-y">Y=${actualY}</span> ` +
-      `<span class="off-z">Z=${actualZ}</span><br>` +
-      `Rotation: <span class="rot-x">X=${rotOffsetX}°</span> ` +
-      `<span class="rot-y">Y=${rotOffsetY}°</span> ` +
-      `<span class="rot-z">Z=${rotOffsetZ}°</span><br>` +
-      `Density: Width=${widthFactor}, Depth=${depthFactor}, Z-Offset=${zOffsetValue}<br>` +
-      `Darkness: Dist=${distanceDark}, Height=${heightDark}, Boost=${distantBoost}<br>` +
-      `${controlsInfo}<br>${densityControls}<br>${darknessControls}`;
-  }
-  
-  // Add camera debug info if helper is visible
-  if (cameraHelper.visible) {
-    document.querySelector(".scrollProgressPrecise").innerHTML += `<br>` +
-      `Camera: <span class="cam-pos">X=${camPosX} Y=${camPosY} Z=${camPosZ}</span><br>` +
-      `Rotation: <span class="cam-rot">X=${camRotX}° Y=${camRotY}° Z=${camRotZ}°</span><br>` +
-      `LookAt: <span class="cam-look">X=${lookX} Y=${lookY} Z=${lookZ}</span><br>` +
-      `Helper: ${helperStatus}`;
-  }
+  // This function is intentionally emptied as it's only used for debugging
 }
 
 /**
@@ -1238,11 +922,6 @@ function updateWaveDensity(width, depth, zOffset) {
   
   // Regenerate particles with new density parameters
   regenerateParticles();
-  
-  console.log(`Wave density updated: Width=${waveWidthFactor}, Depth=${waveDepthFactor}, Z-Offset=${waveZOffset}`);
-  
-  // Update debug display with new values
-  updateDebugDisplay();
 }
 
 /**
@@ -1366,460 +1045,5 @@ function regenerateParticles() {
   particles.material.depthWrite = currentDepthWrite;
 }
 
-// Add debug overlay to the HTML
-document.body.insertAdjacentHTML('beforeend', `
-<div id="debugOverlay" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; z-index: 1000; width: 300px; display: none;">
-  <h3>Debug Information</h3>
-  <div id="debugStats"></div>
-  <div id="particleDebug"></div>
-  <div id="extremePositions"></div>
-  <div style="margin-top: 10px;">
-    <button id="toggleDebug">Hide Debug</button>
-    <button id="captureStats">Capture Stats</button>
-  </div>
-</div>
-`);
-
-// Initialize a structure to store debug stats
-let debugStats = {
-  distanceFactor: {
-    min: 100, max: -100, avg: 0
-  },
-  heightFactor: {
-    min: 100, max: -100, avg: 0
-  },
-  rawDistanceX: {
-    min: 100, max: -100, avg: 0
-  },
-  positions: {
-    x: { min: 100, max: -100 },
-    y: { min: 100, max: -100 },
-    z: { min: 100, max: -100 }
-  },
-  modelPositions: {
-    x: { min: 100, max: -100 },
-    y: { min: 100, max: -100 },
-    z: { min: 100, max: -100 }
-  }
-};
-
-// Toggle debug mode with 'D' key
-window.addEventListener("keydown", (event) => {
-  if (event.key === "d" || event.key === "D") {
-    debugMode = !debugMode;
-    document.getElementById('debugOverlay').style.display = debugMode ? 'block' : 'none';
-    
-    if (debugMode) {
-      console.log("Debug mode activated");
-      document.getElementById('toggleDebug').innerText = "Hide Debug";
-    } else {
-      console.log("Debug mode deactivated");
-      document.getElementById('toggleDebug').innerText = "Show Debug";
-    }
-  }
-  
-  // Existing key handlers
-  // ... existing code ...
-});
-
-// Function to check the position of every particle to find extremes
-function captureVertexStats() {
-  if (!particles) return;
-  
-  // Get all the attributes
-  const geometry = particles.geometry;
-  if (!geometry) return;
-  
-  // Reset stats
-  debugStats = {
-    distanceFactor: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
-    heightFactor: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
-    rawDistanceX: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
-    positions: {
-      x: { min: 100, max: -100 },
-      y: { min: 100, max: -100 },
-      z: { min: 100, max: -100 }
-    },
-    modelPositions: {
-      x: { min: 100, max: -100 },
-      y: { min: 100, max: -100 },
-      z: { min: 100, max: -100 }
-    }
-  };
-  
-  // Create a copy of particle geometry for position analysis
-  const positionAttribute = geometry.getAttribute('position');
-  const particleCount = positionAttribute.count;
-  
-  // Update debug overlay
-  document.getElementById('debugStats').innerHTML = `
-    <p>Particle count: ${particleCount}</p>
-    <p>Current distanceDarknessFactor: ${distanceDarknessFactor.toFixed(2)}</p>
-    <p>Current heightDarknessFactor: ${heightDarknessFactor.toFixed(2)}</p>
-    <p>Current distantHeightBoost: ${distantHeightBoost.toFixed(2)}</p>
-  `;
-  
-  // Track extreme positions
-  let extremePositions = {
-    left: { x: 100, y: 0, z: 0, distance: 0, darkness: 0 },
-    right: { x: -100, y: 0, z: 0, distance: 0, darkness: 0 },
-    front: { x: 0, y: 0, z: -100, distance: 0, darkness: 0 },
-    back: { x: 0, y: 0, z: 100, distance: 0, darkness: 0 },
-    top: { x: 0, y: -100, z: 0, distance: 0, darkness: 0 },
-    bottom: { x: 0, y: 100, z: 0, distance: 0, darkness: 0 }
-  };
-  
-  // Create a raycaster to find specific particles
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2(0, 0);
-  const camera = scene.children.find(child => child instanceof THREE.Camera);
-  
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(particles);
-  
-  // Get debug shader values using special material's uniforms
-  const debugValues = {};
-  if (intersects.length > 0) {
-    const index = intersects[0].index;
-    const modelPos = new THREE.Vector3();
-    particles.getWorldPosition(modelPos);
-    
-    debugValues.worldPosition = modelPos;
-    debugValues.index = index;
-    debugValues.point = intersects[0].point;
-  }
-  
-  // Calculate world matrix for position transformations
-  particles.updateMatrixWorld();
-  const worldMatrix = particles.matrixWorld.clone();
-  
-  // Sample positions at key points to check distance values
-  for (let i = 0; i < particleCount; i++) {
-    const x = positionAttribute.getX(i);
-    const y = positionAttribute.getY(i);
-    const z = positionAttribute.getZ(i);
-    
-    // Track position extremes
-    if (x < debugStats.positions.x.min) debugStats.positions.x.min = x;
-    if (x > debugStats.positions.x.max) debugStats.positions.x.max = x;
-    if (y < debugStats.positions.y.min) debugStats.positions.y.min = y;
-    if (y > debugStats.positions.y.max) debugStats.positions.y.max = y;
-    if (z < debugStats.positions.z.min) debugStats.positions.z.min = z;
-    if (z > debugStats.positions.z.max) debugStats.positions.z.max = z;
-    
-    // Calculate model position (world space)
-    const position = new THREE.Vector3(x, y, z);
-    const modelPosition = position.clone().applyMatrix4(worldMatrix);
-    
-    // Track model position extremes
-    if (modelPosition.x < debugStats.modelPositions.x.min) debugStats.modelPositions.x.min = modelPosition.x;
-    if (modelPosition.x > debugStats.modelPositions.x.max) debugStats.modelPositions.x.max = modelPosition.x;
-    if (modelPosition.y < debugStats.modelPositions.y.min) debugStats.modelPositions.y.min = modelPosition.y;
-    if (modelPosition.y > debugStats.modelPositions.y.max) debugStats.modelPositions.y.max = modelPosition.y;
-    if (modelPosition.z < debugStats.modelPositions.z.min) debugStats.modelPositions.z.min = modelPosition.z;
-    if (modelPosition.z > debugStats.modelPositions.z.max) debugStats.modelPositions.z.max = modelPosition.z;
-    
-    // Calculate distance factors manually to compare with shader
-    const cameraPosition = new THREE.Vector3(0.8, 0.2, 3.5);
-    const dx = cameraPosition.x - modelPosition.x;
-    const dy = cameraPosition.y - modelPosition.y;
-    const dz = cameraPosition.z - modelPosition.z;
-    const distanceToCamera = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const normalizedDistance = Math.min(Math.max(distanceToCamera / 5.0, 0.0), 1.0);
-    const distanceFactor = Math.pow(normalizedDistance, 1.2);
-    
-    // Update the extremes
-    if (modelPosition.x < extremePositions.left.x) {
-      extremePositions.left = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    if (modelPosition.x > extremePositions.right.x) {
-      extremePositions.right = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    if (modelPosition.z < extremePositions.front.z) {
-      extremePositions.front = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    if (modelPosition.z > extremePositions.back.z) {
-      extremePositions.back = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    if (modelPosition.y > extremePositions.top.y) {
-      extremePositions.top = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    if (modelPosition.y < extremePositions.bottom.y) {
-      extremePositions.bottom = {
-        x: modelPosition.x,
-        y: modelPosition.y,
-        z: modelPosition.z,
-        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
-        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
-      };
-    }
-    
-    // Track stats for distance factor
-    if (distanceFactor < debugStats.distanceFactor.min) debugStats.distanceFactor.min = distanceFactor;
-    if (distanceFactor > debugStats.distanceFactor.max) debugStats.distanceFactor.max = distanceFactor;
-    debugStats.distanceFactor.sum += distanceFactor;
-    debugStats.distanceFactor.count++;
-    
-    // Track stats for raw distance
-    if (distanceToCamera < debugStats.rawDistanceX.min) debugStats.rawDistanceX.min = distanceToCamera;
-    if (distanceToCamera > debugStats.rawDistanceX.max) debugStats.rawDistanceX.max = distanceToCamera;
-    debugStats.rawDistanceX.sum += distanceToCamera;
-    debugStats.rawDistanceX.count++;
-  }
-  
-  // Calculate averages
-  if (debugStats.distanceFactor.count > 0) {
-    debugStats.distanceFactor.avg = debugStats.distanceFactor.sum / debugStats.distanceFactor.count;
-  }
-  
-  if (debugStats.rawDistanceX.count > 0) {
-    debugStats.rawDistanceX.avg = debugStats.rawDistanceX.sum / debugStats.rawDistanceX.count;
-  }
-  
-  // Display extreme positions
-  document.getElementById('extremePositions').innerHTML = `
-    <h4>Extreme Positions:</h4>
-    <p>Left: x=${extremePositions.left.x.toFixed(2)}, distance=${extremePositions.left.distance.toFixed(2)}, darkness=${extremePositions.left.darkness.toFixed(2)}</p>
-    <p>Right: x=${extremePositions.right.x.toFixed(2)}, distance=${extremePositions.right.distance.toFixed(2)}, darkness=${extremePositions.right.darkness.toFixed(2)}</p>
-    <p>Front: z=${extremePositions.front.z.toFixed(2)}, distance=${extremePositions.front.distance.toFixed(2)}, darkness=${extremePositions.front.darkness.toFixed(2)}</p>
-    <p>Back: z=${extremePositions.back.z.toFixed(2)}, distance=${extremePositions.back.distance.toFixed(2)}, darkness=${extremePositions.back.darkness.toFixed(2)}</p>
-    <hr>
-    <p>Position X range: ${debugStats.positions.x.min.toFixed(2)} to ${debugStats.positions.x.max.toFixed(2)}</p>
-    <p>Model X range: ${debugStats.modelPositions.x.min.toFixed(2)} to ${debugStats.modelPositions.x.max.toFixed(2)}</p>
-    <p>Raw distance range: ${debugStats.rawDistanceX.min.toFixed(2)} to ${debugStats.rawDistanceX.max.toFixed(2)} (avg: ${debugStats.rawDistanceX.avg.toFixed(2)})</p>
-    <p>Distance factor range: ${debugStats.distanceFactor.min.toFixed(2)} to ${debugStats.distanceFactor.max.toFixed(2)} (avg: ${debugStats.distanceFactor.avg.toFixed(2)})</p>
-  `;
-  
-  console.log("Debug stats captured:", debugStats);
-  console.log("Extreme positions:", extremePositions);
-}
-
 // Add event listeners for debug interface
-document.getElementById('toggleDebug').addEventListener('click', function() {
-  debugMode = !debugMode;
-  document.getElementById('debugOverlay').style.display = debugMode ? 'block' : 'none';
-  this.innerText = debugMode ? "Hide Debug" : "Show Debug";
-});
-
-document.getElementById('captureStats').addEventListener('click', function() {
-  captureVertexStats();
-});
-
-// Add after the debug overlay HTML insertion
-document.body.insertAdjacentHTML('beforeend', `
-<canvas id="darknessVisualizer" style="position: fixed; bottom: 10px; right: 10px; width: 200px; height: 200px; background: rgba(0,0,0,0.8); display: none;"></canvas>
-`);
-
-// Add new function for darkness visualization
-function updateDarknessVisualizer() {
-  if (!debugMode || !particles) return;
-  
-  const canvas = document.getElementById('darknessVisualizer');
-  if (!canvas) return;
-  
-  // Show the canvas when in debug mode
-  canvas.style.display = 'block';
-  
-  const ctx = canvas.getContext('2d');
-  const width = 200;
-  const height = 200;
-  
-  // Set actual canvas dimensions (not just CSS dimensions)
-  canvas.width = width;
-  canvas.height = height;
-  
-  // Clear canvas
-  ctx.clearRect(0, 0, width, height);
-  
-  // Draw background
-  ctx.fillStyle = 'rgba(30, 30, 30, 0.8)';
-  ctx.fillRect(0, 0, width, height);
-  
-  // Draw grid lines
-  ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
-  ctx.lineWidth = 0.5;
-  
-  // Vertical grid lines
-  for (let x = 0; x <= width; x += 20) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  
-  // Horizontal grid lines
-  for (let y = 0; y <= height; y += 20) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-  
-  // Draw distance rings around camera
-  const cameraX = (0.8 + 2) / 4 * width; // Camera X position in canvas
-  const cameraZ = (0 + 2) / 4 * height;  // Camera Z position in canvas
-  
-  // Draw distance rings (3D distances from camera)
-  const ringRadii = [1, 2, 3, 4, 5]; // Distances in world units
-  ctx.strokeStyle = 'rgba(80, 80, 255, 0.3)';
-  
-  for (const radius of ringRadii) {
-    // Convert world distance to canvas pixels
-    const canvasRadius = radius / 5 * width / 2;
-    
-    ctx.beginPath();
-    ctx.arc(cameraX, cameraZ, canvasRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    
-    // Add distance label
-    ctx.fillStyle = 'rgba(150, 150, 255, 0.7)';
-    ctx.font = '8px Arial';
-    ctx.fillText(`${radius}u`, cameraX + canvasRadius - 10, cameraZ);
-  }
-  
-  // Calculate world matrix for position transformations
-  particles.updateMatrixWorld();
-  const worldMatrix = particles.matrixWorld.clone();
-  
-  // Get position attribute
-  const positionAttribute = particles.geometry.getAttribute('position');
-  const particleCount = Math.min(positionAttribute.count, 500); // Limit to 500 for performance
-  
-  // Sample particles to visualize darkness
-  for (let i = 0; i < particleCount; i += 5) { // Sample every 5th particle
-    const x = positionAttribute.getX(i);
-    const y = positionAttribute.getY(i);
-    const z = positionAttribute.getZ(i);
-    
-    // Calculate model position (world space)
-    const position = new THREE.Vector3(x, y, z);
-    const modelPosition = position.clone().applyMatrix4(worldMatrix);
-    
-    // Calculate distance using our 3D method
-    const cameraPosition = new THREE.Vector3(0.8, 0.2, 3.5);
-    const dx = cameraPosition.x - modelPosition.x;
-    const dy = cameraPosition.y - modelPosition.y;
-    const dz = cameraPosition.z - modelPosition.z;
-    const distanceToCamera = Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const normalizedDistance = Math.min(Math.max(distanceToCamera / 5.0, 0.0), 1.0);
-    const distanceFactor = Math.pow(normalizedDistance, 1.2);
-    
-    // Calculate darkness level
-    const baseDistanceDarkness = distanceFactor * distanceFactor * distanceDarknessFactor;
-    
-    // Map particle position to canvas position (top-down view)
-    const canvasX = (modelPosition.x + 2) / 4 * width; // Map from -2,2 to 0,width
-    const canvasZ = (modelPosition.z + 2) / 4 * height; // Map from -2,2 to 0,height
-    
-    // Calculate color based on darkness level
-    const darkness = baseDistanceDarkness;
-    const color = Math.floor((1 - darkness) * 255);
-    
-    // Draw particle with color representing darkness
-    ctx.fillStyle = `rgb(${color}, ${color}, ${color})`;
-    ctx.beginPath();
-    ctx.arc(canvasX, canvasZ, 3, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw line from camera to particle for a few particles
-    if (i % 50 === 0) {
-      ctx.strokeStyle = `rgba(255, 255, 0, 0.2)`;
-      ctx.beginPath();
-      ctx.moveTo(cameraX, cameraZ);
-      ctx.lineTo(canvasX, canvasZ);
-      ctx.stroke();
-      
-      // Show actual distance for these highlighted particles
-      ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
-      ctx.font = '7px Arial';
-      const midX = (cameraX + canvasX) / 2;
-      const midZ = (cameraZ + canvasZ) / 2;
-      ctx.fillText(`${distanceToCamera.toFixed(1)}`, midX, midZ);
-    }
-  }
-  
-  // Draw camera position
-  ctx.fillStyle = 'red';
-  ctx.beginPath();
-  ctx.arc(cameraX, cameraZ, 5, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Draw camera frustum
-  const fov = 30 * (Math.PI / 180); // 30 degrees FOV
-  const aspect = window.innerWidth / window.innerHeight;
-  const near = 0.5; // Near plane distance
-  const far = 5.0;  // Far plane distance
-  
-  // Draw frustum lines
-  ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
-  ctx.lineWidth = 1;
-  
-  // Calculate frustum width at near and far planes
-  const nearHeight = 2 * Math.tan(fov / 2) * near;
-  const nearWidth = nearHeight * aspect;
-  const farHeight = 2 * Math.tan(fov / 2) * far;
-  const farWidth = farHeight * aspect;
-  
-  // Convert to canvas coordinates (adjusted for top-down view)
-  const nearLeft = cameraX - (nearWidth / 2) / 4 * width;
-  const nearRight = cameraX + (nearWidth / 2) / 4 * width;
-  const farLeft = cameraX - (farWidth / 2) / 4 * width;
-  const farRight = cameraX + (farWidth / 2) / 4 * width;
-  
-  const nearZ = cameraZ - near / 4 * height;
-  const farZ = cameraZ - far / 4 * height;
-  
-  // Draw the frustum lines
-  ctx.beginPath();
-  ctx.moveTo(cameraX, cameraZ); // Start at camera
-  ctx.lineTo(nearLeft, nearZ);  // Left edge of near plane
-  ctx.lineTo(farLeft, farZ);    // Left edge of far plane
-  ctx.lineTo(farRight, farZ);   // Bottom edge of far plane
-  ctx.lineTo(nearRight, nearZ); // Right edge of near plane
-  ctx.closePath();              // Back to camera
-  ctx.stroke();
-  
-  // Add labels
-  ctx.fillStyle = 'white';
-  ctx.font = '10px Arial';
-  ctx.fillText('Top-Down View (XZ Plane)', 10, 12);
-  ctx.fillText('Red: Camera', 10, 24);
-  ctx.fillText('Blue rings: 3D distance', 10, 36);
-  ctx.fillText('Yellow lines: Sample rays', 10, 48);
-  ctx.fillText('White→Black: No→Full darkness', 10, 60);
-}
+// Debug overlay is removed as it's not needed for production
