@@ -20,9 +20,9 @@ let animationStartOffset = 0.2; // Start animation after scrolling 20% into sect
 let animationEndSection = 1.5; // Which section to complete the animation at (1-based index)
 
 // Animation sequence control
-let mainAnimationEndProgress = 0.77; // The main movement animation completes at this scroll progress
+let mainAnimationEndProgress = 0.57; // The main movement animation completes at this scroll progress
 // Fade-out animation parameter
-let fadeOutStartProgress = 0.8; // Start fadeout animation at 90% of the scroll progress
+let fadeOutStartProgress = 0.6; // Start fadeout animation at 90% of the scroll progress
 
 // Mouse follower circle parameters
 let mouseFollowerEnabled = false; // Toggle to enable/disable the mouse follower (set to false to disable)
