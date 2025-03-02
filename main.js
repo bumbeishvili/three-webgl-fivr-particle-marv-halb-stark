@@ -5,7 +5,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const isDevelopment = false;
 
 // Global configuration
-const waveSpeed = 1; // Set to 0 to disable wave animations
+const waveSpeed = 1.5; // Set to 0 to disable wave animations
 let waveOffsetX = -0.35; // Master X offset value
 let waveOffsetY = -0.3; // Master Y offset value 
 let waveOffsetZ = -1.15; // Master Z offset value
@@ -14,7 +14,7 @@ let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wa
 let waveRotationZ = .0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
-let distanceDarknessFactor = 1.80; // Controls how much particles darken based on distance (0-1)
+let distanceDarknessFactor = .80; // Controls how much particles darken based on distance (0-1)
 let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
@@ -652,7 +652,7 @@ for (let i = 0; i < particlesCount; i++) {
     // Inner 50% - normal gradient from dark blue to light blue
     gridColor = new THREE.Color().lerpColors(
       new THREE.Color("#0452D5"),  // Dark blue
-      new THREE.Color("#a9ddfb"),  // Light blue to match X shape
+      new THREE.Color("#d5edfb"),  // Light blue to match X shape
       enhancedZ                    // Enhanced normalized distance value
     );
   }
@@ -686,7 +686,7 @@ for (let i = 0; i < particlesCount; i++) {
 
   // Set particle size based on color gradient (enhancedZ) - similar to X shape sizing
   // Particles with lighter colors (higher Z) will be larger, darker ones smaller
-  particleSizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
+  particleSizes[i] = 0.6 //+ enhancedZ * 0.6 + (Math.random() * 0.1);
 }
 
 /**
@@ -747,7 +747,6 @@ function initParticles() {
     // Using more precise thresholds to identify front, side and back regions
     const isFront = targetZ > 0.1; // Clear front-facing particles
     const isBack = targetZ < -0.1; // Clear back-facing particles
-    const isSide = !isFront && !isBack; // Side particles
 
     // Apply a slight rotation to the X model to match the reference images
     // Rotate around Y axis by about 15 degrees
