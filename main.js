@@ -4,13 +4,27 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 
 // Global configuration
-const waveSpeed = 0.5; // Controls the speed of wave animations (higher = faster)
-let waveOffsetX = -0.45; // Master X offset value
-let waveOffsetY = -0.15; // Master Y offset value 
-let waveOffsetZ = -2.20; // Master Z offset value
+const waveSpeed = 1; // Set to 0 to disable wave animations
+let waveOffsetX = -0.35; // Master X offset value
+let waveOffsetY = 0.05; // Master Y offset value 
+let waveOffsetZ = -1.65; // Master Z offset value
 let waveRotationX = -5.73 * (Math.PI / 180); // Controls the X rotation of the wave pattern (radians)
 let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wave pattern (radians)
 let waveRotationZ = 0.0; // Controls the Z rotation of the wave pattern (radians)
+
+// Darkness effect controls - adjust these to control different aspects of the darkening effect
+let distanceDarknessFactor = 0.80; // Controls how much particles darken based on distance (0-1)
+let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
+let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
+
+// Debug flags
+let debugMode = false; // Global flag to enable/disable debug mode
+let debugFrontPosition = new THREE.Vector3(0, 0, 0); // Track front-most position
+let debugBackPosition = new THREE.Vector3(0, 0, 0); // Track back-most position
+let debugLeftPosition = new THREE.Vector3(0, 0, 0); // Track left-most position 
+let debugRightPosition = new THREE.Vector3(0, 0, 0); // Track right-most position
+let debugHighestPosition = new THREE.Vector3(0, 0, 0); // Track highest position
+let debugLowestPosition = new THREE.Vector3(0, 0, 0); // Track lowest position
 
 // Wave density controls - these parameters affect how the particles are arranged
 let waveWidthFactor = 1.5; // Width of the wave pattern (X-axis spread)
@@ -77,18 +91,27 @@ const vertexShader = `
     uniform vec2 uResolution;
     uniform float uSize;
     uniform float uProgress;
-    uniform float uTime;
-    uniform float uWaveSpeed;
     uniform float uWaveOffsetX;
     uniform float uWaveOffsetY;
     uniform float uWaveOffsetZ;
     uniform float uWaveRotationX;
     uniform float uWaveRotationY;
     uniform float uWaveRotationZ;
+    uniform float uTime;
     attribute vec3 aPositionTarget;
     attribute float aSize;
+    attribute float aTargetSize; // Add attribute for X shape target size
     attribute vec3 aColor;
+    attribute vec3 aGridColor;
     varying vec3 vColor;
+    varying float vWaveHeight; // New varying to pass wave height to fragment shader
+    varying float vDistanceFactor; // New varying to pass distance factor to fragment shader
+    
+    // Debug varyings
+    varying vec3 vStaticPosition; // Original position before transformations
+    varying vec3 vFinalPosition; // Final position after all transformations
+    varying vec3 vModelPosition; // Position after model matrix
+    varying float vRawDistanceX; // Raw distance value before normalization
 
     ${document.querySelector("#noise").textContent}
 
@@ -137,84 +160,118 @@ const vertexShader = `
         float delay = (1.0 - duration) * noise * 1.2; // Slightly extended delay range for more staggering
         float end = delay + duration;
         
-        // Create two animated positions - one for the wave and one for the transition to X shape
-        vec3 wavePosition = position;
+        // Static position with offsets and rotation applied
+        vec3 staticPosition = position;
         
-        // Create a wider transition zone (35%-65%) for smoother wave fadeout
-        // Use different smoothstep ranges for different effects to stagger the transitions
-        float waveTransitionFactor = 1.0 - smoothstep(0.35, 0.65, uProgress);
+        // Apply wave animation to grid state (when uProgress is low)
+        // The wave effect weakens as we transition to the X shape
+        float waveStrength = 1.0 - smoothstep(0.0, 0.3, uProgress);
         
-        // Calculate the wave position with full animation
-        if (waveTransitionFactor > 0.001) {
-            // Calculate wave factor with smoother fade-out
-            float waveFactor = smoothstep(0.0, 1.0, waveTransitionFactor);
+        // Base position for wave calculation (use original position without rotation/offset)
+        vec3 waveBasePos = position;
+        
+        // Create more dynamic horizontal waving with multiple wave components
+        // Primary horizontal wave (increased amplitude)
+        float waveX1 = sin(waveBasePos.x * 2.0 + uTime * 0.5) * 0.08;
+        
+        // Secondary horizontal wave with different frequency
+        float waveX2 = sin(waveBasePos.z * 1.5 + uTime * 0.7) * 0.06; 
+        
+        // Combine horizontal waves
+        float waveX = waveX1 + waveX2;
+        
+        // Vertical wave
+        float waveY = cos(waveBasePos.z * 3.0 + uTime * 0.7) * 0.04;
+        
+        // Z-axis wave with horizontal influence
+        float waveZ1 = sin(waveBasePos.x * 2.5 + waveBasePos.z * 2.0 + uTime * 0.6) * 0.04;
+        float waveZ2 = cos(waveBasePos.x * 1.7 + uTime * 0.4) * 0.05; // Additional Z movement based on X
+        float waveZ = waveZ1 + waveZ2; // Remove the excessive multiplier
+        
+        // Calculate wave displacements
+        vec3 waveDisplacement = vec3(waveX, waveY, waveZ);
+        
+        // Apply the wave displacement to position
+        staticPosition = waveBasePos + waveDisplacement * waveStrength;
+        
+        // Save staticPosition before offsets for debugging
+        vStaticPosition = staticPosition;
+        
+        // Apply offset
+        staticPosition.x += uWaveOffsetX;
+        staticPosition.y += uWaveOffsetY;
+        staticPosition.z += uWaveOffsetZ;
             
-            // Create more random and varied wave patterns
-            float timeOffset = (position.x + uWaveOffsetX) * 2.5 + (position.z + uWaveOffsetZ) * 2.5; // Increased from 2.0 to 2.5 for compact waves
-            
-            // Apply offsets directly to the noise patterns for stronger effect
-            float noise1 = simplexNoise3d(vec3((position.xz + vec2(uWaveOffsetX, uWaveOffsetZ)) * 2.0, uTime * 0.2 * uWaveSpeed)) * 0.08; // Increased scale from 1.5 to 2.0, reduced amplitude from 0.1 to 0.08
-            float noise2 = simplexNoise3d(vec3((position.zx + vec2(uWaveOffsetZ, uWaveOffsetX)) * 1.2, uTime * 0.3 * uWaveSpeed + 100.0)) * 0.06; // Increased scale from 0.8 to 1.2, reduced amplitude from 0.08 to 0.06
-            
-            // Create diagonal movement (45 degrees)
-            float diagonalWave = sin(timeOffset + uTime * 1.5 * uWaveSpeed) * 0.03; // Reduced from 0.04 to 0.03 for more compact waves
-            
-            // Apply the waves in diagonal pattern (45 degrees) with offsets
-            // Use waveFactor 1.0 for offsets to make them more apparent
-            wavePosition.y += (noise2 - diagonalWave) * waveFactor + uWaveOffsetY; // Apply Y offset more directly
-            wavePosition.z += (noise1 + diagonalWave * 0.5) * waveFactor + uWaveOffsetZ; // Apply Z offset more directly
-            wavePosition.x += uWaveOffsetX; // Apply X offset directly without waveFactor
-            
-            // Apply rotation to the wave pattern
-            mat3 rotMatrix = rotateZ(uWaveRotationZ) * rotateY(uWaveRotationY) * rotateX(uWaveRotationX);
-            wavePosition = rotMatrix * wavePosition;
-        }
-
+        // Apply rotation to the pattern
+        mat3 rotMatrix = rotateZ(uWaveRotationZ) * rotateY(uWaveRotationY) * rotateX(uWaveRotationX);
+        staticPosition = rotMatrix * staticPosition;
+        
+        // Calculate normalized wave height AFTER all transformations
+        // This ensures the height-based fade matches what's visually seen
+        float maxVisualHeight = 0.15; // Adjusted based on final transformed heights
+        float visualHeight = staticPosition.y; // Use the y-coordinate after all transformations
+        float normalizedVisualHeight = (visualHeight + 0.2) / (maxVisualHeight + 0.2); // Adjusted range
+        normalizedVisualHeight = clamp(normalizedVisualHeight, 0.0, 1.0); // Ensure values stay in 0-1 range
+        
         // Calculate the target position for X shape
         vec3 targetPosition = aPositionTarget;
         
         // Calculate assembly progress with staggered timing
         float assemblyProgress = smoothstep(delay, end, uProgress);
         
-        // Gradually blend between wave and direct position when transitioning to the X
-        // This creates a smooth handoff between the wave animation and the X shape
-        float positionBlendFactor = smoothstep(0.4, 0.6, uProgress);
+        // Simply transition directly from static position to target
+        vec3 finalPosition = mix(staticPosition, targetPosition, assemblyProgress);
         
-        // Create a smooth transition between the original position, wave, and final X shape
-        // The key factor is making sure there's a continuous blend between EACH stage
-        vec3 animatedPosition;
-        
-        if (uProgress < 0.4) {
-            // Before 40%, blend between original position and wave animation
-            animatedPosition = wavePosition;
-        } else if (uProgress < 0.6) {
-            // Between 40% and 60%, smoothly blend between wave and direct position
-            // This creates a continuous transition between wave animation and assembly
-            float localBlend = (uProgress - 0.4) / 0.2; // 0 to 1 range
-            float smoothLocalBlend = smoothstep(0.0, 1.0, localBlend);
-            
-            // Interpolate between wave position and position (without wave effects)
-            animatedPosition = mix(wavePosition, position, smoothLocalBlend);
-        } else {
-            // After 60%, use the direct position for assembly to X shape
-            animatedPosition = position;
-        }
-        
-        // Finally blend to target position (X shape) based on progress
-        vec3 finalPosition = mix(animatedPosition, targetPosition, assemblyProgress);
+        // Save finalPosition after all transformations but before model matrix
+        vFinalPosition = finalPosition;
         
         // Standard projection matrix transformations
         vec4 modelPosition = modelMatrix * vec4(finalPosition, 1.0);
+        
+        // Save model position for debugging
+        vModelPosition = modelPosition.xyz;
+        
         vec4 viewPosition = viewMatrix * modelPosition;
         vec4 projectedPosition = projectionMatrix * viewPosition;
         gl_Position = projectedPosition;
 
-        // Calculate point size with perspective scaling
-        gl_PointSize = aSize * uSize * uResolution.y;
+        // Now calculate distance factor based on the final transformed position
+        // This uses true 3D distance to the camera for more accurate depth effects
+        vec3 cameraPosition = vec3(0.8, 0.2, 3.5);
+
+        // Calculate true distance in 3D space from camera
+        // This properly accounts for all rotations and transformations
+        float dx = cameraPosition.x - modelPosition.x;
+        float dy = cameraPosition.y - modelPosition.y;
+        float dz = cameraPosition.z - modelPosition.z;
+        float distanceToCamera = sqrt(dx*dx + dy*dy + dz*dz);
+
+        // Save raw distance for debugging
+        vRawDistanceX = distanceToCamera;
+
+        // Normalize the distance factor (0-1 range, where 1 is furthest)
+        // Adjust the divisor based on the scene scale
+        float normalizedDistance = clamp(distanceToCamera / 5.0, 0.0, 1.0);
+
+        // Apply a power curve to make the effect more dramatic at greater distances
+        float distanceFactor = pow(normalizedDistance, 1.2);
+        
+        // Pass both height and distance factors to fragment shader
+        vWaveHeight = normalizedVisualHeight * waveStrength;
+        vDistanceFactor = distanceFactor * waveStrength;
+
+        // Blend between grid size and target X shape size
+        float finalSize = mix(aSize, aTargetSize, assemblyProgress);
+        gl_PointSize = finalSize * uSize * uResolution.y;
         gl_PointSize *= (1.0 / - viewPosition.z);
 
-        // Pass color to fragment shader
-        vColor = aColor;
+        // Use a sharper transition curve for color blending
+        // This ensures we see a clear difference between grid and X colors
+        // Use a step function that completes early in the animation (at 0.3 instead of 0.6)
+        float colorBlend = smoothstep(0.0, 0.3, uProgress);
+        
+        // Blend between grid colors and target colors
+        vColor = mix(aGridColor, aColor, colorBlend);
     }
 `;
 
@@ -225,8 +282,18 @@ const vertexShader = `
  */
 const fragmentShader = `
     varying vec3 vColor;
+    varying float vWaveHeight; // Receive wave height from vertex shader
+    varying float vDistanceFactor; // Receive distance factor from vertex shader
+    // Debug varyings
+    varying vec3 vStaticPosition; // Original position before transformations
+    varying vec3 vFinalPosition; // Final position after all transformations
+    varying vec3 vModelPosition; // Position after model matrix
+    varying float vRawDistanceX; // Raw distance value before normalization
     uniform float uProgress; // Animation progress uniform
     uniform float uBlendTransition; // Dedicated uniform for blend transition
+    uniform float uDistanceDarknessFactor; // Factor for distance-based darkening
+    uniform float uHeightDarknessFactor; // Factor for height-based darkening
+    uniform float uDistantHeightBoost; // Factor for boosting darkness of distant high particles
     
     void main() {
         // Calculate distance from center of point sprite
@@ -244,10 +311,66 @@ const fragmentShader = `
         // For normal blending in X shape: use normal colors with appropriate alpha
         vec3 finalColor = vColor * mix(1.5, 1.0, blendFactor);
         
-        // Control opacity based on blending mode
+        // Dynamic height threshold that gets lower as distance increases
+        // Base threshold is 0.7, but can go as low as 0.4 for the most distant particles
+        float heightThreshold = mix(0.7, 0.3, vDistanceFactor);
+        
+        // Calculate fade factor (0 = no fade, 1 = full fade to black)
+        // Only apply when vWaveHeight > heightThreshold
+        float fadeFactor = 0.0;
+        if (vWaveHeight > heightThreshold) {
+            // Remap from threshold-1.0 range to 0.0-1.0 range
+            fadeFactor = (vWaveHeight - heightThreshold) / (1.0 - heightThreshold);
+            
+            // Make the fade more aggressive for distant particles
+            // Higher distance factor = steeper power curve
+            float fadePower = mix(1.0, 3.5, vDistanceFactor);
+            fadeFactor = pow(fadeFactor, 1.0 / fadePower); // Inverted power for more aggressive fade
+            
+            // Apply a smooth curve for more natural transition
+            fadeFactor = smoothstep(0.0, 1.0, fadeFactor);
+        }
+        
+        // Add a base distance darkness effect regardless of height
+        float baseDistanceDarkness = vDistanceFactor * vDistanceFactor * uDistanceDarknessFactor;
+        
+        // Boost the fade factor based on distance for more dramatic effect at distance
+        fadeFactor = mix(fadeFactor, 1.0, vDistanceFactor * vWaveHeight * uDistantHeightBoost);
+        
+        // Combine the base distance darkness with the height-based fade
+        fadeFactor = max(fadeFactor, baseDistanceDarkness);
+        
+        // Apply height darkness factor to adjust the strength of height-based fading
+        fadeFactor = min(1.0, fadeFactor * uHeightDarknessFactor);
+        
+        // Fade color to black based on combined height and distance factors
+        finalColor = mix(finalColor, vec3(0.0, 0.0, 0.0), fadeFactor);
+        
+        // Calculate color brightness (higher for white, lower for dark colors)
+        float brightness = (finalColor.r + finalColor.g + finalColor.b) / 3.0;
+        
+        // Control opacity based on blending mode and color brightness
+        // Brighter colors (like white) get higher opacity
         // Lower opacity for additive blending (starting state)
         // Higher opacity for normal blending (end state)
-        float alpha = mix(0.4, 0.9, blendFactor) * circle;
+        float baseOpacity = mix(0.6, 1.0, blendFactor);
+        float brightnessBoost = brightness * 0.3; // Additional opacity boost for bright colors
+        float alpha = (baseOpacity + brightnessBoost) * circle;
+        
+        // Ensure alpha doesn't exceed 1.0
+        alpha = min(alpha, 1.0);
+        
+        // Fade out particles that are near the height threshold with distance-aware fading
+        if (vWaveHeight > heightThreshold) {
+            // Apply additional opacity reduction based on combined height and distance
+            // Make distant high particles fade out more dramatically
+            float opacityReduction = fadeFactor * (0.8 + vDistanceFactor * 0.4);
+            alpha *= (1.0 - opacityReduction);
+        } else {
+            // Add some opacity reduction even for particles below height threshold if they're distant
+            float distanceOpacityReduction = baseDistanceDarkness * 0.6;
+            alpha *= (1.0 - distanceOpacityReduction);
+        }
         
         // Output final color with dynamic components
         gl_FragColor = vec4(finalColor, alpha);
@@ -262,6 +385,9 @@ const sceneSize = {
   height: window.innerHeight,
   pixelRatio: Math.min(window.devicePixelRatio, 2),
 };
+
+// Initialize scrollY at the top level
+let scrollY = window.scrollY;
 
 // No scene helpers - removed for cleaner visualization
 
@@ -291,6 +417,36 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "h" || event.key === "H") {
     cameraHelper.visible = !cameraHelper.visible;
     updateDebugDisplay();
+  }
+
+  // Darkness effect controls
+  const darknessStep = 0.05; // Amount to change darkness parameters with each key press
+  
+  // Distance darkness controls (keys 1/2)
+  if (event.key === "1") {
+    updateDarknessParams(Math.max(0, distanceDarknessFactor - darknessStep), heightDarknessFactor, distantHeightBoost);
+    console.log("Decreased distance darkness");
+  } else if (event.key === "2") {
+    updateDarknessParams(Math.min(1.0, distanceDarknessFactor + darknessStep), heightDarknessFactor, distantHeightBoost);
+    console.log("Increased distance darkness");
+  }
+  
+  // Height darkness controls (keys 3/4)
+  if (event.key === "3") {
+    updateDarknessParams(distanceDarknessFactor, Math.max(0, heightDarknessFactor - darknessStep*2), distantHeightBoost);
+    console.log("Decreased height darkness");
+  } else if (event.key === "4") {
+    updateDarknessParams(distanceDarknessFactor, Math.min(2.0, heightDarknessFactor + darknessStep*2), distantHeightBoost);
+    console.log("Increased height darkness");
+  }
+  
+  // Distant height boost controls (keys 5/6)
+  if (event.key === "5") {
+    updateDarknessParams(distanceDarknessFactor, heightDarknessFactor, Math.max(0, distantHeightBoost - darknessStep*2));
+    console.log("Decreased distant height boost");
+  } else if (event.key === "6") {
+    updateDarknessParams(distanceDarknessFactor, heightDarknessFactor, Math.min(2.0, distantHeightBoost + darknessStep*2));
+    console.log("Increased distant height boost");
   }
 
   // Wave offset controls
@@ -359,7 +515,8 @@ window.addEventListener("keydown", (event) => {
     updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
     updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
     updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
-    console.log("Reset wave parameters to master values");
+    updateDarknessParams(0.30, 1.0, 1.2); // Reset to default darkness values
+    console.log("Reset all parameters to master values");
   }
   
   // True zero reset (Z key)
@@ -384,6 +541,7 @@ let particles = null;
 const particlesCount = 2754;
 const positions = new Float32Array(particlesCount * 3);
 const particleSizes = new Float32Array(particlesCount);
+const gridColors = new Float32Array(particlesCount * 3); // Add array for grid colors
 
 /**
  * Initial particle positions arranged in a U-shaped grid pattern
@@ -400,38 +558,76 @@ for (let i = 0; i < particlesCount; i++) {
     const col = i % gridSize;
     
     // Convert grid coordinates to world space using density control parameters
-    const x = (col / gridSize - 0.5) * waveWidthFactor; // Horizontal spread controlled by width factor
-    const z = (row / gridSize - 0.5) * waveDepthFactor; // Depth spread controlled by depth factor
+    const x = (col / gridSize - 0.5) * waveWidthFactor;
+    const z = (row / gridSize - 0.5) * waveDepthFactor;
     
-    // Create a U-shaped wave effect:
-    // 1. Base sine wave for the primary undulation
-    // 2. Parabolic component for the U-shape (x^2 term)
-    // This creates higher sides and a lower middle section
-    const parabolicFactor = 0.25; // Increased from 0.2 to 0.25 to maintain U shape with compressed x range
+    // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
+    // We need to do this before applying rotation to match initParticles
+    // Use the original Z value from grid calculation
+    const originalZ = z;
     
-    // IMPORTANT: Calculate wave without the offsets - offsets will be applied in the shader
-    const baseSineWave = Math.sin(x * Math.PI - Math.PI/2) * 0.18; // Slightly reduced amplitude
-    const uShapeComponent = parabolicFactor * (x * x * 2.0); // Parabolic U shape based on x position
+    // Normalize z position for color gradient - use the original Z
+    const minZ = -3.0; // Adjusted for original z values before rotation
+    const maxZ = 3.0;  // Adjusted for original z values before rotation
+    const normalizedZ = Math.min(1, Math.max(0, (originalZ - minZ) / (maxZ - minZ)));
     
-    // Combine the wave components and add z influence for depth variation without offsets
-    const y = baseSineWave + uShapeComponent + z * 0.15; // Reduced z influence (from 0.2 to 0.15)
+    // Apply a stronger power curve to create more dramatic contrast
+    const enhancedZ = Math.pow(normalizedZ, 2.5);
+    
+    // Calculate color based on original z position
+    // For the outer 50% (normalizedZ < 0.5), blend towards black instead of just dark blue
+    let gridColor;
+    
+    if (normalizedZ < 0.5) {
+        // Outer 50% - blend between black and dark blue based on how far out we are
+        // Remap 0-0.5 range to 0-1 for blending
+        const fadeToBlack = 1.0 - (normalizedZ / 0.5);
+        
+        // Create a smooth transition between dark blue and black
+        gridColor = new THREE.Color().lerpColors(
+            new THREE.Color("#0452D5"),  // Dark blue
+            new THREE.Color("#000000"),  // Pure black
+            Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
+        );
+    } else {
+        // Inner 50% - normal gradient from dark blue to light blue
+        gridColor = new THREE.Color().lerpColors(
+            new THREE.Color("#0452D5"),  // Dark blue
+            new THREE.Color("#63BEF4"),  // Light blue to match X shape
+            enhancedZ                    // Enhanced normalized distance value
+        );
+    }
+    
+    // Update grid color components
+    gridColors[i3] = gridColor.r;
+    gridColors[i3 + 1] = gridColor.g;
+    gridColors[i3 + 2] = gridColor.b;
+    
+    // Create a U-shaped wave effect (static, no animation)
+    const parabolicFactor = 0.25;
+    const baseSineWave = Math.sin(x * Math.PI - Math.PI/2) * 0.18;
+    const uShapeComponent = parabolicFactor * (x * x * 2.0);
+    
+    // Combine the components for static shape
+    const y = baseSineWave + uShapeComponent + z * 0.15;
 
-    // Apply rotation around Y-axis by approximately -16 degrees (negative for proper orientation)
-    const rotationAngle = -16 * (Math.PI / 180); // Convert to radians
+    // Apply rotation around Y-axis
+    const rotationAngle = -16 * (Math.PI / 180);
     const cosY = Math.cos(rotationAngle);
     const sinY = Math.sin(rotationAngle);
     
-    // Apply Y-axis rotation to x and z coordinates (without offsets)
-    // Using the configurable Z offset parameter to position the wave in front of camera
-    const rotatedX = x * cosY - (z + waveZOffset) * sinY; 
+    // Apply Y-axis rotation to x and z coordinates
+    const rotatedX = x * cosY - (z + waveZOffset) * sinY;
     const rotatedZ = x * sinY + (z + waveZOffset) * cosY;
     
-    // Store position with rotation applied (but no offsets)
+    // Store position with rotation applied
     positions[i3] = rotatedX;
-    positions[i3 + 1] = y - 0.2; // Maintain same vertical offset
-    positions[i3 + 2] = rotatedZ; // Use rotated Z coordinate
+    positions[i3 + 1] = y - 0.2;
+    positions[i3 + 2] = rotatedZ;
     
-    particleSizes[i] = 1;
+    // Set particle size based on color gradient (enhancedZ) - similar to X shape sizing
+    // Particles with lighter colors (higher Z) will be larger, darker ones smaller
+    particleSizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
 }
 
 /**
@@ -463,8 +659,13 @@ function initParticles() {
   // Create new arrays with the adjusted size
   const adjustedPositions = new Float32Array(adjustedCount * 3);
   const adjustedSizes = new Float32Array(adjustedCount);
+  const adjustedTargetSizes = new Float32Array(adjustedCount); // New array for X shape sizes
   const colors = new Float32Array(adjustedCount * 3);
   const adjustedTargetPositions = new Float32Array(adjustedCount * 3);
+
+  // Define color palette once for both grid and X shape
+  const darkBlue = new THREE.Color("#0452D5");
+  const lightBlue = new THREE.Color("#63BEF4");
 
   // Copy data to the adjusted arrays
   for (let i = 0; i < adjustedCount; i++) {
@@ -474,6 +675,9 @@ function initParticles() {
     adjustedPositions[i3] = positions[i3];
     adjustedPositions[i3 + 1] = positions[i3 + 1];
     adjustedPositions[i3 + 2] = positions[i3 + 2];
+
+    // Copy grid sizes from initial setup
+    adjustedSizes[i] = particleSizes[i];
 
     // Get target positions from the X model
     let targetX = xShape.array[i3];
@@ -524,15 +728,10 @@ function initParticles() {
                         (0.8 + (normalizedDist * 0.5) + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
                         (0.7 + (Math.random() * 0.1)); // Back: Smaller than before
     
-    adjustedSizes[i] = particleSize;
+    // Store X shape sizes separately from grid sizes
+    adjustedTargetSizes[i] = particleSize;
     
     // COLOR CALCULATION - GRADIENT FOR FRONT FACE
-    // Dark blue for back particles and front center
-    const darkBlue = new THREE.Color("#0452D5");
-    
-    // Light blue for front corners/ends
-    const lightBlue = new THREE.Color("#63BEF4");
-    
     // Apply color based on position
     let color;
     
@@ -612,7 +811,15 @@ function initParticles() {
   geometry.setAttribute("position", new THREE.BufferAttribute(adjustedPositions, 3));
   geometry.setAttribute("aPositionTarget", new THREE.BufferAttribute(adjustedTargetPositions, 3));
   geometry.setAttribute("aSize", new THREE.BufferAttribute(adjustedSizes, 1));
+  geometry.setAttribute("aTargetSize", new THREE.BufferAttribute(adjustedTargetSizes, 1)); // Add X shape sizes
   geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+  
+  // Create a properly sized copy of the global gridColors for this geometry
+  const adjustedGridColors = new Float32Array(adjustedCount * 3);
+  for (let i = 0; i < adjustedCount * 3; i++) {
+    adjustedGridColors[i] = gridColors[i];
+  }
+  geometry.setAttribute("aGridColor", new THREE.BufferAttribute(adjustedGridColors, 3));
 
   // Create shader material with uniforms
   const material = new THREE.ShaderMaterial({
@@ -622,21 +829,23 @@ function initParticles() {
       uSize: { value: 0.026 }, // Base size multiplier
       uProgress: { value: 0.0 }, 
       uBlendTransition: { value: 0.0 }, // Blend transition uniform
+      uTime: { value: 0.0 }, // Time uniform for wave animation
       uResolution: {
         value: new THREE.Vector2(
           sceneSize.width * sceneSize.pixelRatio,
           sceneSize.height * sceneSize.pixelRatio
         ),
       },
-      uTime: { value: 0.0 },
-      uWaveSpeed: { value: waveSpeed },
-      // Use the master offset values for initialization
+      // Remove wave animation uniforms
       uWaveOffsetX: { value: waveOffsetX },
       uWaveOffsetY: { value: waveOffsetY },
       uWaveOffsetZ: { value: waveOffsetZ },
       uWaveRotationX: { value: waveRotationX },
       uWaveRotationY: { value: waveRotationY },
-      uWaveRotationZ: { value: waveRotationZ }
+      uWaveRotationZ: { value: waveRotationZ },
+      uDistanceDarknessFactor: { value: distanceDarknessFactor },
+      uHeightDarknessFactor: { value: heightDarknessFactor },
+      uDistantHeightBoost: { value: distantHeightBoost }
     },
     transparent: true,
     depthWrite: false, // Disable depth writing for additive blending
@@ -662,8 +871,6 @@ function initParticles() {
  * Scroll event handler
  * Updates animation progress based on scroll position
  */
-let scrollY = window.scrollY;
-
 window.addEventListener("scroll", () => {
   scrollY = window.scrollY;
 
@@ -780,17 +987,35 @@ window.addEventListener("scroll", () => {
  * Animation loop
  * Renders the scene on each frame
  */
+let clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
   // Update time for wave animation
-  if (particles) {
-    particles.material.uniforms.uTime.value += 0.01;
+  const deltaTime = clock.getDelta();
+  if (particles && waveSpeed > 0) {
+    // Only update time if wave animation is enabled
+    particles.material.uniforms.uTime.value += deltaTime * waveSpeed;
   }
   
   // Update camera helper if it's visible
   if (cameraHelper.visible) {
     cameraHelper.update();
+  }
+  
+  // Update debug info when in debug mode
+  if (debugMode) {
+    // Limit debug stats updates to once every 30 frames for performance
+    if (Math.floor(performance.now() / 100) % 3 === 0) {
+      requestAnimationFrame(() => {
+        captureVertexStats();
+        updateDarknessVisualizer(); // Add this line
+      });
+    }
+  } else {
+    // Hide visualizer when debug mode is off
+    const canvas = document.getElementById('darknessVisualizer');
+    if (canvas) canvas.style.display = 'none';
   }
 
   // Render the scene
@@ -862,6 +1087,31 @@ function updateWaveRotations(x, y, z) {
 }
 
 /**
+ * Updates darkness effect parameters and applies them to shader uniforms
+ * @param {number} distance - Factor for distance-based darkening
+ * @param {number} height - Factor for height-based darkening
+ * @param {number} distantHeight - Factor for boosting darkness of distant high particles
+ */
+function updateDarknessParams(distance, height, distantHeight) {
+  // Update global variables
+  distanceDarknessFactor = distance;
+  heightDarknessFactor = height;
+  distantHeightBoost = distantHeight;
+  
+  // Update shader uniforms if particles exist
+  if (particles) {
+    particles.material.uniforms.uDistanceDarknessFactor.value = distance;
+    particles.material.uniforms.uHeightDarknessFactor.value = height;
+    particles.material.uniforms.uDistantHeightBoost.value = distantHeight;
+  }
+  
+  console.log(`Darkness params updated: Distance=${distance.toFixed(2)}, Height=${height.toFixed(2)}, Boost=${distantHeight.toFixed(2)}`);
+  
+  // Update debug display with new values
+  updateDebugDisplay();
+}
+
+/**
  * Updates the debug display with current values
  * Shows scroll progress, rotation status, wave offset values, and camera information
  */
@@ -890,6 +1140,11 @@ function updateDebugDisplay() {
   const depthFactor = waveDepthFactor.toFixed(2);
   const zOffsetValue = waveZOffset.toFixed(2);
   
+  // Format darkness parameters
+  const distanceDark = distanceDarknessFactor.toFixed(2);
+  const heightDark = heightDarknessFactor.toFixed(2);
+  const distantBoost = distantHeightBoost.toFixed(2);
+  
   // Format camera parameters to 2 decimal places
   const camPosX = camera.position.x.toFixed(2);
   const camPosY = camera.position.y.toFixed(2);
@@ -913,6 +1168,7 @@ function updateDebugDisplay() {
   // Controls reminder
   const controlsInfo = `Controls: WASD/QE = move, R = reset, Z = zero`;
   const densityControls = `Density: Shift+Arrows = width/depth, Shift+Page = Z-offset`;
+  const darknessControls = `Darkness: 1/2 = distance, 3/4 = height, 5/6 = boost`;
   
   if (progress >= 60 && particles) {
     // When rotation is active (at 60% or higher), show rotation values and offsets
@@ -935,7 +1191,8 @@ function updateDebugDisplay() {
       `<span class="rot-y">Y=${rotOffsetY}°</span> ` +
       `<span class="rot-z">Z=${rotOffsetZ}°</span><br>` +
       `Density: Width=${widthFactor}, Depth=${depthFactor}, Z-Offset=${zOffsetValue}<br>` +
-      `${controlsInfo}<br>${densityControls}`;
+      `Darkness: Dist=${distanceDark}, Height=${heightDark}, Boost=${distantBoost}<br>` +
+      `${controlsInfo}<br>${densityControls}<br>${darknessControls}`;
   } else {
     // When rotation is not active (below 60%), only show offset values
     document.querySelector(".scrollProgressPrecise").innerHTML = 
@@ -953,7 +1210,8 @@ function updateDebugDisplay() {
       `<span class="rot-y">Y=${rotOffsetY}°</span> ` +
       `<span class="rot-z">Z=${rotOffsetZ}°</span><br>` +
       `Density: Width=${widthFactor}, Depth=${depthFactor}, Z-Offset=${zOffsetValue}<br>` +
-      `${controlsInfo}<br>${densityControls}`;
+      `Darkness: Dist=${distanceDark}, Height=${heightDark}, Boost=${distantBoost}<br>` +
+      `${controlsInfo}<br>${densityControls}<br>${darknessControls}`;
   }
   
   // Add camera debug info if helper is visible
@@ -997,7 +1255,6 @@ function regenerateParticles() {
   // Store current progress and material properties
   const currentProgress = particles.material.uniforms.uProgress.value;
   const currentBlendTransition = particles.material.uniforms.uBlendTransition.value;
-  const currentTime = particles.material.uniforms.uTime.value;
   const currentBlending = particles.material.blending;
   const currentDepthWrite = particles.material.depthWrite;
   
@@ -1005,6 +1262,14 @@ function regenerateParticles() {
   const geometry = particles.geometry;
   const positionAttribute = geometry.getAttribute('position');
   const positions = positionAttribute.array;
+  const gridColorAttribute = geometry.getAttribute('aGridColor');
+  const gridColors = gridColorAttribute.array;
+  const sizeAttribute = geometry.getAttribute('aSize'); // These are the grid sizes, not X shape sizes
+  const sizes = sizeAttribute.array;
+  
+  // Define color palette for recalculation
+  const darkBlue = new THREE.Color("#0452D5");
+  const lightBlue = new THREE.Color("#63BEF4");
   
   // Recalculate positions with new wave density parameters
   const gridSize = Math.ceil(Math.sqrt(positions.length / 3));
@@ -1020,12 +1285,58 @@ function regenerateParticles() {
     const x = (col / gridSize - 0.5) * waveWidthFactor;
     const z = (row / gridSize - 0.5) * waveDepthFactor;
     
-    // Create a U-shaped wave effect
+    // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
+    // We need to do this before applying rotation to match initParticles
+    // Use the original Z value from grid calculation
+    const originalZ = z;
+    
+    // Normalize z position for color gradient - use the original Z
+    const minZ = -3.0; // Adjusted for original z values before rotation
+    const maxZ = 3.0;  // Adjusted for original z values before rotation
+    const normalizedZ = Math.min(1, Math.max(0, (originalZ - minZ) / (maxZ - minZ)));
+    
+    // Apply a stronger power curve to create more dramatic contrast
+    const enhancedZ = Math.pow(normalizedZ, 2.5);
+    
+    // Calculate color based on original z position
+    // For the outer 50% (normalizedZ < 0.5), blend towards black instead of just dark blue
+    let gridColor;
+    
+    if (normalizedZ < 0.5) {
+        // Outer 50% - blend between black and dark blue based on how far out we are
+        // Remap 0-0.5 range to 0-1 for blending
+        const fadeToBlack = 1.0 - (normalizedZ / 0.5);
+        
+        // Create a smooth transition between dark blue and black
+        gridColor = new THREE.Color().lerpColors(
+            new THREE.Color("#0452D5"),  // Dark blue
+            new THREE.Color("#000000"),  // Pure black
+            Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
+        );
+    } else {
+        // Inner 50% - normal gradient from dark blue to light blue
+        gridColor = new THREE.Color().lerpColors(
+            new THREE.Color("#0452D5"),  // Dark blue
+            new THREE.Color("#63BEF4"),  // Light blue to match X shape
+            enhancedZ                    // Enhanced normalized distance value
+        );
+    }
+    
+    // Update grid color components
+    gridColors[i3] = gridColor.r;
+    gridColors[i3 + 1] = gridColor.g;
+    gridColors[i3 + 2] = gridColor.b;
+    
+    // Only modify the grid sizes (aSize), not the X shape sizes (aTargetSize)
+    // This ensures X shape sizes remain intact during transitions
+    sizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
+    
+    // Create a U-shaped wave effect (static, no animation)
     const parabolicFactor = 0.25;
     const baseSineWave = Math.sin(x * Math.PI - Math.PI/2) * 0.18;
     const uShapeComponent = parabolicFactor * (x * x * 2.0);
     
-    // Combine the wave components
+    // Combine the components for static shape
     const y = baseSineWave + uShapeComponent + z * 0.15;
 
     // Apply rotation around Y-axis
@@ -1043,13 +1354,472 @@ function regenerateParticles() {
     positions[i3 + 2] = rotatedZ;
   }
   
-  // Update the position attribute
+  // Update the position, color, and size attributes
   positionAttribute.needsUpdate = true;
+  gridColorAttribute.needsUpdate = true;
+  sizeAttribute.needsUpdate = true;
   
   // Restore animation state
   particles.material.uniforms.uProgress.value = currentProgress;
   particles.material.uniforms.uBlendTransition.value = currentBlendTransition;
-  particles.material.uniforms.uTime.value = currentTime;
   particles.material.blending = currentBlending;
   particles.material.depthWrite = currentDepthWrite;
+}
+
+// Add debug overlay to the HTML
+document.body.insertAdjacentHTML('beforeend', `
+<div id="debugOverlay" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; z-index: 1000; width: 300px; display: none;">
+  <h3>Debug Information</h3>
+  <div id="debugStats"></div>
+  <div id="particleDebug"></div>
+  <div id="extremePositions"></div>
+  <div style="margin-top: 10px;">
+    <button id="toggleDebug">Hide Debug</button>
+    <button id="captureStats">Capture Stats</button>
+  </div>
+</div>
+`);
+
+// Initialize a structure to store debug stats
+let debugStats = {
+  distanceFactor: {
+    min: 100, max: -100, avg: 0
+  },
+  heightFactor: {
+    min: 100, max: -100, avg: 0
+  },
+  rawDistanceX: {
+    min: 100, max: -100, avg: 0
+  },
+  positions: {
+    x: { min: 100, max: -100 },
+    y: { min: 100, max: -100 },
+    z: { min: 100, max: -100 }
+  },
+  modelPositions: {
+    x: { min: 100, max: -100 },
+    y: { min: 100, max: -100 },
+    z: { min: 100, max: -100 }
+  }
+};
+
+// Toggle debug mode with 'D' key
+window.addEventListener("keydown", (event) => {
+  if (event.key === "d" || event.key === "D") {
+    debugMode = !debugMode;
+    document.getElementById('debugOverlay').style.display = debugMode ? 'block' : 'none';
+    
+    if (debugMode) {
+      console.log("Debug mode activated");
+      document.getElementById('toggleDebug').innerText = "Hide Debug";
+    } else {
+      console.log("Debug mode deactivated");
+      document.getElementById('toggleDebug').innerText = "Show Debug";
+    }
+  }
+  
+  // Existing key handlers
+  // ... existing code ...
+});
+
+// Function to check the position of every particle to find extremes
+function captureVertexStats() {
+  if (!particles) return;
+  
+  // Get all the attributes
+  const geometry = particles.geometry;
+  if (!geometry) return;
+  
+  // Reset stats
+  debugStats = {
+    distanceFactor: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
+    heightFactor: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
+    rawDistanceX: { min: 100, max: -100, avg: 0, sum: 0, count: 0 },
+    positions: {
+      x: { min: 100, max: -100 },
+      y: { min: 100, max: -100 },
+      z: { min: 100, max: -100 }
+    },
+    modelPositions: {
+      x: { min: 100, max: -100 },
+      y: { min: 100, max: -100 },
+      z: { min: 100, max: -100 }
+    }
+  };
+  
+  // Create a copy of particle geometry for position analysis
+  const positionAttribute = geometry.getAttribute('position');
+  const particleCount = positionAttribute.count;
+  
+  // Update debug overlay
+  document.getElementById('debugStats').innerHTML = `
+    <p>Particle count: ${particleCount}</p>
+    <p>Current distanceDarknessFactor: ${distanceDarknessFactor.toFixed(2)}</p>
+    <p>Current heightDarknessFactor: ${heightDarknessFactor.toFixed(2)}</p>
+    <p>Current distantHeightBoost: ${distantHeightBoost.toFixed(2)}</p>
+  `;
+  
+  // Track extreme positions
+  let extremePositions = {
+    left: { x: 100, y: 0, z: 0, distance: 0, darkness: 0 },
+    right: { x: -100, y: 0, z: 0, distance: 0, darkness: 0 },
+    front: { x: 0, y: 0, z: -100, distance: 0, darkness: 0 },
+    back: { x: 0, y: 0, z: 100, distance: 0, darkness: 0 },
+    top: { x: 0, y: -100, z: 0, distance: 0, darkness: 0 },
+    bottom: { x: 0, y: 100, z: 0, distance: 0, darkness: 0 }
+  };
+  
+  // Create a raycaster to find specific particles
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2(0, 0);
+  const camera = scene.children.find(child => child instanceof THREE.Camera);
+  
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObject(particles);
+  
+  // Get debug shader values using special material's uniforms
+  const debugValues = {};
+  if (intersects.length > 0) {
+    const index = intersects[0].index;
+    const modelPos = new THREE.Vector3();
+    particles.getWorldPosition(modelPos);
+    
+    debugValues.worldPosition = modelPos;
+    debugValues.index = index;
+    debugValues.point = intersects[0].point;
+  }
+  
+  // Calculate world matrix for position transformations
+  particles.updateMatrixWorld();
+  const worldMatrix = particles.matrixWorld.clone();
+  
+  // Sample positions at key points to check distance values
+  for (let i = 0; i < particleCount; i++) {
+    const x = positionAttribute.getX(i);
+    const y = positionAttribute.getY(i);
+    const z = positionAttribute.getZ(i);
+    
+    // Track position extremes
+    if (x < debugStats.positions.x.min) debugStats.positions.x.min = x;
+    if (x > debugStats.positions.x.max) debugStats.positions.x.max = x;
+    if (y < debugStats.positions.y.min) debugStats.positions.y.min = y;
+    if (y > debugStats.positions.y.max) debugStats.positions.y.max = y;
+    if (z < debugStats.positions.z.min) debugStats.positions.z.min = z;
+    if (z > debugStats.positions.z.max) debugStats.positions.z.max = z;
+    
+    // Calculate model position (world space)
+    const position = new THREE.Vector3(x, y, z);
+    const modelPosition = position.clone().applyMatrix4(worldMatrix);
+    
+    // Track model position extremes
+    if (modelPosition.x < debugStats.modelPositions.x.min) debugStats.modelPositions.x.min = modelPosition.x;
+    if (modelPosition.x > debugStats.modelPositions.x.max) debugStats.modelPositions.x.max = modelPosition.x;
+    if (modelPosition.y < debugStats.modelPositions.y.min) debugStats.modelPositions.y.min = modelPosition.y;
+    if (modelPosition.y > debugStats.modelPositions.y.max) debugStats.modelPositions.y.max = modelPosition.y;
+    if (modelPosition.z < debugStats.modelPositions.z.min) debugStats.modelPositions.z.min = modelPosition.z;
+    if (modelPosition.z > debugStats.modelPositions.z.max) debugStats.modelPositions.z.max = modelPosition.z;
+    
+    // Calculate distance factors manually to compare with shader
+    const cameraPosition = new THREE.Vector3(0.8, 0.2, 3.5);
+    const dx = cameraPosition.x - modelPosition.x;
+    const dy = cameraPosition.y - modelPosition.y;
+    const dz = cameraPosition.z - modelPosition.z;
+    const distanceToCamera = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    const normalizedDistance = Math.min(Math.max(distanceToCamera / 5.0, 0.0), 1.0);
+    const distanceFactor = Math.pow(normalizedDistance, 1.2);
+    
+    // Update the extremes
+    if (modelPosition.x < extremePositions.left.x) {
+      extremePositions.left = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    if (modelPosition.x > extremePositions.right.x) {
+      extremePositions.right = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    if (modelPosition.z < extremePositions.front.z) {
+      extremePositions.front = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    if (modelPosition.z > extremePositions.back.z) {
+      extremePositions.back = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    if (modelPosition.y > extremePositions.top.y) {
+      extremePositions.top = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    if (modelPosition.y < extremePositions.bottom.y) {
+      extremePositions.bottom = {
+        x: modelPosition.x,
+        y: modelPosition.y,
+        z: modelPosition.z,
+        distance: distanceToCamera, // Use distanceToCamera instead of distanceX
+        darkness: distanceFactor * distanceFactor * distanceDarknessFactor
+      };
+    }
+    
+    // Track stats for distance factor
+    if (distanceFactor < debugStats.distanceFactor.min) debugStats.distanceFactor.min = distanceFactor;
+    if (distanceFactor > debugStats.distanceFactor.max) debugStats.distanceFactor.max = distanceFactor;
+    debugStats.distanceFactor.sum += distanceFactor;
+    debugStats.distanceFactor.count++;
+    
+    // Track stats for raw distance
+    if (distanceToCamera < debugStats.rawDistanceX.min) debugStats.rawDistanceX.min = distanceToCamera;
+    if (distanceToCamera > debugStats.rawDistanceX.max) debugStats.rawDistanceX.max = distanceToCamera;
+    debugStats.rawDistanceX.sum += distanceToCamera;
+    debugStats.rawDistanceX.count++;
+  }
+  
+  // Calculate averages
+  if (debugStats.distanceFactor.count > 0) {
+    debugStats.distanceFactor.avg = debugStats.distanceFactor.sum / debugStats.distanceFactor.count;
+  }
+  
+  if (debugStats.rawDistanceX.count > 0) {
+    debugStats.rawDistanceX.avg = debugStats.rawDistanceX.sum / debugStats.rawDistanceX.count;
+  }
+  
+  // Display extreme positions
+  document.getElementById('extremePositions').innerHTML = `
+    <h4>Extreme Positions:</h4>
+    <p>Left: x=${extremePositions.left.x.toFixed(2)}, distance=${extremePositions.left.distance.toFixed(2)}, darkness=${extremePositions.left.darkness.toFixed(2)}</p>
+    <p>Right: x=${extremePositions.right.x.toFixed(2)}, distance=${extremePositions.right.distance.toFixed(2)}, darkness=${extremePositions.right.darkness.toFixed(2)}</p>
+    <p>Front: z=${extremePositions.front.z.toFixed(2)}, distance=${extremePositions.front.distance.toFixed(2)}, darkness=${extremePositions.front.darkness.toFixed(2)}</p>
+    <p>Back: z=${extremePositions.back.z.toFixed(2)}, distance=${extremePositions.back.distance.toFixed(2)}, darkness=${extremePositions.back.darkness.toFixed(2)}</p>
+    <hr>
+    <p>Position X range: ${debugStats.positions.x.min.toFixed(2)} to ${debugStats.positions.x.max.toFixed(2)}</p>
+    <p>Model X range: ${debugStats.modelPositions.x.min.toFixed(2)} to ${debugStats.modelPositions.x.max.toFixed(2)}</p>
+    <p>Raw distance range: ${debugStats.rawDistanceX.min.toFixed(2)} to ${debugStats.rawDistanceX.max.toFixed(2)} (avg: ${debugStats.rawDistanceX.avg.toFixed(2)})</p>
+    <p>Distance factor range: ${debugStats.distanceFactor.min.toFixed(2)} to ${debugStats.distanceFactor.max.toFixed(2)} (avg: ${debugStats.distanceFactor.avg.toFixed(2)})</p>
+  `;
+  
+  console.log("Debug stats captured:", debugStats);
+  console.log("Extreme positions:", extremePositions);
+}
+
+// Add event listeners for debug interface
+document.getElementById('toggleDebug').addEventListener('click', function() {
+  debugMode = !debugMode;
+  document.getElementById('debugOverlay').style.display = debugMode ? 'block' : 'none';
+  this.innerText = debugMode ? "Hide Debug" : "Show Debug";
+});
+
+document.getElementById('captureStats').addEventListener('click', function() {
+  captureVertexStats();
+});
+
+// Add after the debug overlay HTML insertion
+document.body.insertAdjacentHTML('beforeend', `
+<canvas id="darknessVisualizer" style="position: fixed; bottom: 10px; right: 10px; width: 200px; height: 200px; background: rgba(0,0,0,0.8); display: none;"></canvas>
+`);
+
+// Add new function for darkness visualization
+function updateDarknessVisualizer() {
+  if (!debugMode || !particles) return;
+  
+  const canvas = document.getElementById('darknessVisualizer');
+  if (!canvas) return;
+  
+  // Show the canvas when in debug mode
+  canvas.style.display = 'block';
+  
+  const ctx = canvas.getContext('2d');
+  const width = 200;
+  const height = 200;
+  
+  // Set actual canvas dimensions (not just CSS dimensions)
+  canvas.width = width;
+  canvas.height = height;
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, width, height);
+  
+  // Draw background
+  ctx.fillStyle = 'rgba(30, 30, 30, 0.8)';
+  ctx.fillRect(0, 0, width, height);
+  
+  // Draw grid lines
+  ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+  ctx.lineWidth = 0.5;
+  
+  // Vertical grid lines
+  for (let x = 0; x <= width; x += 20) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  
+  // Horizontal grid lines
+  for (let y = 0; y <= height; y += 20) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  
+  // Draw distance rings around camera
+  const cameraX = (0.8 + 2) / 4 * width; // Camera X position in canvas
+  const cameraZ = (0 + 2) / 4 * height;  // Camera Z position in canvas
+  
+  // Draw distance rings (3D distances from camera)
+  const ringRadii = [1, 2, 3, 4, 5]; // Distances in world units
+  ctx.strokeStyle = 'rgba(80, 80, 255, 0.3)';
+  
+  for (const radius of ringRadii) {
+    // Convert world distance to canvas pixels
+    const canvasRadius = radius / 5 * width / 2;
+    
+    ctx.beginPath();
+    ctx.arc(cameraX, cameraZ, canvasRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Add distance label
+    ctx.fillStyle = 'rgba(150, 150, 255, 0.7)';
+    ctx.font = '8px Arial';
+    ctx.fillText(`${radius}u`, cameraX + canvasRadius - 10, cameraZ);
+  }
+  
+  // Calculate world matrix for position transformations
+  particles.updateMatrixWorld();
+  const worldMatrix = particles.matrixWorld.clone();
+  
+  // Get position attribute
+  const positionAttribute = particles.geometry.getAttribute('position');
+  const particleCount = Math.min(positionAttribute.count, 500); // Limit to 500 for performance
+  
+  // Sample particles to visualize darkness
+  for (let i = 0; i < particleCount; i += 5) { // Sample every 5th particle
+    const x = positionAttribute.getX(i);
+    const y = positionAttribute.getY(i);
+    const z = positionAttribute.getZ(i);
+    
+    // Calculate model position (world space)
+    const position = new THREE.Vector3(x, y, z);
+    const modelPosition = position.clone().applyMatrix4(worldMatrix);
+    
+    // Calculate distance using our 3D method
+    const cameraPosition = new THREE.Vector3(0.8, 0.2, 3.5);
+    const dx = cameraPosition.x - modelPosition.x;
+    const dy = cameraPosition.y - modelPosition.y;
+    const dz = cameraPosition.z - modelPosition.z;
+    const distanceToCamera = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    const normalizedDistance = Math.min(Math.max(distanceToCamera / 5.0, 0.0), 1.0);
+    const distanceFactor = Math.pow(normalizedDistance, 1.2);
+    
+    // Calculate darkness level
+    const baseDistanceDarkness = distanceFactor * distanceFactor * distanceDarknessFactor;
+    
+    // Map particle position to canvas position (top-down view)
+    const canvasX = (modelPosition.x + 2) / 4 * width; // Map from -2,2 to 0,width
+    const canvasZ = (modelPosition.z + 2) / 4 * height; // Map from -2,2 to 0,height
+    
+    // Calculate color based on darkness level
+    const darkness = baseDistanceDarkness;
+    const color = Math.floor((1 - darkness) * 255);
+    
+    // Draw particle with color representing darkness
+    ctx.fillStyle = `rgb(${color}, ${color}, ${color})`;
+    ctx.beginPath();
+    ctx.arc(canvasX, canvasZ, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw line from camera to particle for a few particles
+    if (i % 50 === 0) {
+      ctx.strokeStyle = `rgba(255, 255, 0, 0.2)`;
+      ctx.beginPath();
+      ctx.moveTo(cameraX, cameraZ);
+      ctx.lineTo(canvasX, canvasZ);
+      ctx.stroke();
+      
+      // Show actual distance for these highlighted particles
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
+      ctx.font = '7px Arial';
+      const midX = (cameraX + canvasX) / 2;
+      const midZ = (cameraZ + canvasZ) / 2;
+      ctx.fillText(`${distanceToCamera.toFixed(1)}`, midX, midZ);
+    }
+  }
+  
+  // Draw camera position
+  ctx.fillStyle = 'red';
+  ctx.beginPath();
+  ctx.arc(cameraX, cameraZ, 5, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw camera frustum
+  const fov = 30 * (Math.PI / 180); // 30 degrees FOV
+  const aspect = window.innerWidth / window.innerHeight;
+  const near = 0.5; // Near plane distance
+  const far = 5.0;  // Far plane distance
+  
+  // Draw frustum lines
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
+  ctx.lineWidth = 1;
+  
+  // Calculate frustum width at near and far planes
+  const nearHeight = 2 * Math.tan(fov / 2) * near;
+  const nearWidth = nearHeight * aspect;
+  const farHeight = 2 * Math.tan(fov / 2) * far;
+  const farWidth = farHeight * aspect;
+  
+  // Convert to canvas coordinates (adjusted for top-down view)
+  const nearLeft = cameraX - (nearWidth / 2) / 4 * width;
+  const nearRight = cameraX + (nearWidth / 2) / 4 * width;
+  const farLeft = cameraX - (farWidth / 2) / 4 * width;
+  const farRight = cameraX + (farWidth / 2) / 4 * width;
+  
+  const nearZ = cameraZ - near / 4 * height;
+  const farZ = cameraZ - far / 4 * height;
+  
+  // Draw the frustum lines
+  ctx.beginPath();
+  ctx.moveTo(cameraX, cameraZ); // Start at camera
+  ctx.lineTo(nearLeft, nearZ);  // Left edge of near plane
+  ctx.lineTo(farLeft, farZ);    // Left edge of far plane
+  ctx.lineTo(farRight, farZ);   // Bottom edge of far plane
+  ctx.lineTo(nearRight, nearZ); // Right edge of near plane
+  ctx.closePath();              // Back to camera
+  ctx.stroke();
+  
+  // Add labels
+  ctx.fillStyle = 'white';
+  ctx.font = '10px Arial';
+  ctx.fillText('Top-Down View (XZ Plane)', 10, 12);
+  ctx.fillText('Red: Camera', 10, 24);
+  ctx.fillText('Blue rings: 3D distance', 10, 36);
+  ctx.fillText('Yellow lines: Sample rays', 10, 48);
+  ctx.fillText('White→Black: No→Full darkness', 10, 60);
 }
