@@ -130,7 +130,7 @@ const vertexShader = `
         
         // Apply wave animation to grid state (when uProgress is low)
         // The wave effect weakens as we transition to the X shape
-        float waveStrength = 1.0 - smoothstep(0.0, 0.3, uProgress);
+        float waveStrength = 1.0 - smoothstep(0.0, 0.6, uProgress);
         
         // Base position for wave calculation (use original position without rotation/offset)
         vec3 waveBasePos = position;
@@ -232,8 +232,8 @@ const vertexShader = `
 
         // Use a sharper transition curve for color blending
         // This ensures we see a clear difference between grid and X colors
-        // Use a step function that completes early in the animation (at 0.3 instead of 0.6)
-        float colorBlend = smoothstep(0.0, 0.3, uProgress);
+        // Transition between 40-70% of the animation progress
+        float colorBlend = smoothstep(0.4, 0.7, uProgress);
         
         // Blend between grid colors and target colors
         vColor = mix(aGridColor, aColor, colorBlend);
@@ -736,24 +736,24 @@ window.addEventListener("scroll", () => {
     particles.material.uniforms.uProgress.value = progress / 100;
     
     // Calculate blend transition from additive to normal blending
-    // - Wave state (0-35%): Fully additive blending
-    // - Transition period (35-65%): Gradual change to normal blending
-    // - X shape (65-100%): Normal blending
+    // - Wave state (0-40%): Fully additive blending
+    // - Transition period (40-70%): Gradual change to normal blending
+    // - X shape (70-100%): Normal blending
     // This matches the position transition timing in the vertex shader
-    const blendProgress = Math.max(0, Math.min(1, (progress - 35) / 30));
+    const blendProgress = Math.max(0, Math.min(1, (progress - 40) / 30));
     
     // Apply smoothstep easing to the blend transition for better smoothing
     const smoothBlendProgress = blendProgress * blendProgress * (3 - 2 * blendProgress);
     particles.material.uniforms.uBlendTransition.value = smoothBlendProgress;
     
-    // Create a wider transition window for blending mode switches (45%-55% instead of exactly 50%)
+    // Create a wider transition window for blending mode switches (50%-60% instead of exactly 50%)
     // This staggers the changes to avoid all changes happening at once
     if (blendProgress > 0.6 && particles.material.blending === THREE.AdditiveBlending) {
-      // Switch to normal blending at 60% of the transition (53% of scroll)
+      // Switch to normal blending at 60% of the transition (58% of scroll)
       particles.material.blending = THREE.NormalBlending;
       particles.material.needsUpdate = true; // Important: update material after changing blending
     } else if (blendProgress <= 0.4 && particles.material.blending === THREE.NormalBlending) {
-      // Switch back to additive blending at 40% of the transition (47% of scroll)
+      // Switch back to additive blending at 40% of the transition (52% of scroll)
       particles.material.blending = THREE.AdditiveBlending;
       particles.material.needsUpdate = true; // Important: update material after changing blending
     }
