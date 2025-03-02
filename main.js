@@ -17,10 +17,10 @@ let distantHeightBoost = 1.2; // Controls extra darkening for particles that are
 
 // Animation control parameters
 let animationStartOffset = 0.2; // Start animation after scrolling 20% into section 1 (0-1)
-let animationEndSection = 1; // Which section to complete the animation at (1-based index)
+let animationEndSection = 2; // Which section to complete the animation at (1-based index)
 
 // Mouse follower circle parameters
-let mouseFollowerEnabled = true; // Toggle to enable/disable the mouse follower
+let mouseFollowerEnabled = false; // Toggle to enable/disable the mouse follower (set to false to disable)
 let mouseFollowerSize = 0.1; // Size of the circle that follows the mouse
 let mouseFollowerColor = '#3366ff'; // Color of the circle
 let mouseFollowerOpacity = 0; // Opacity of the circle (0-1)
@@ -28,7 +28,7 @@ let mouseFollowerDepth = 2.0; // Z-depth position of the follower (smaller = clo
 let mouseFollower; // Will hold the circle mesh object
 
 // Particle disruption effect parameters
-let disruptionEnabled = true; // Toggle to enable/disable the disruption effect
+let disruptionEnabled = false; // Toggle to enable/disable the disruption effect (set to false to disable)
 let disruptionRadius = 0.3; // How far from the mouse the effect reaches
 let disruptionStrength = 0.3; // How strongly particles are pushed away
 let disruptionFalloff = 0.1; // How quickly the effect diminishes with distance (higher = sharper falloff)
@@ -984,12 +984,9 @@ function animate() {
   if (particles && particles.material.uniforms.uTime) {
     particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
     
-    // Update disruption effect uniforms
-    particles.material.uniforms.uDisruptionEnabled.value = disruptionEnabled;
-    particles.material.uniforms.uMousePosition.value = mouseWorldPosition;
-    particles.material.uniforms.uDisruptionRadius.value = disruptionRadius;
-    particles.material.uniforms.uDisruptionStrength.value = disruptionStrength;
-    particles.material.uniforms.uDisruptionFalloff.value = disruptionFalloff;
+    // Update disruption effect uniforms - always false
+    particles.material.uniforms.uDisruptionEnabled.value = false; // Force this to false
+    // No need to update other disruption-related values since it's disabled
   }
   
   // Smooth mouse movement
@@ -1014,7 +1011,8 @@ function animate() {
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
 
-    // Update mouse follower position if it exists
+    // Mouse follower is disabled, so we don't need to update its position
+    // The code below won't execute when mouseFollowerEnabled is false
     if (mouseFollowerEnabled && mouseFollower) {
       // Create a raycaster to get exact 3D position from mouse coordinates
       const raycaster = new THREE.Raycaster();
@@ -1040,8 +1038,7 @@ function animate() {
       mouseFollower.position.y = targetPosition.y;
       mouseFollower.position.z = targetZ; // Keep z position constant
       
-      // Store the mouse world position for the disruption effect
-      mouseWorldPosition.copy(mouseFollower.position);
+      // Don't update mouse world position since disruption is disabled
     }
   }
   
