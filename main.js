@@ -82,15 +82,97 @@ function getScriptParams() {
   return params;
 }
 
-// Usage
+// Read script parameters
 const scriptParams = getScriptParams();
 console.log('Script parameters:', scriptParams);
+
+// Parameter override system
+function applyParameterOverrides() {
+  // Define parameters that can be overridden and their types
+  const parameterDefinitions = {
+    // Wave parameters
+    waveSpeed: 'number',
+    waveOffsetX: 'number',
+    waveOffsetY: 'number',
+    waveOffsetZ: 'number',
+    waveRotationX: 'angle', // Special handling for angles in degrees
+    waveRotationY: 'angle',
+    waveRotationZ: 'angle',
+    
+    // Darkness effect parameters
+    distanceDarknessFactor: 'number',
+    heightDarknessFactor: 'number',
+    distantHeightBoost: 'number',
+    
+    // Animation parameters
+    animationStartOffset: 'number',
+    animationEndSection: 'number',
+    mainAnimationEndProgress: 'number',
+    fadeOutStartProgress: 'number',
+    scrollEasing: 'number',
+    
+    // Mouse follower parameters
+    mouseFollowerEnabled: 'boolean',
+    mouseFollowerSize: 'number',
+    mouseFollowerColor: 'string',
+    mouseFollowerOpacity: 'number',
+    mouseFollowerDepth: 'number',
+    
+    // Disruption parameters
+    disruptionEnabled: 'boolean',
+    disruptionRadius: 'number',
+    disruptionStrength: 'number',
+    disruptionFalloff: 'number',
+    
+    // Wave density parameters
+    waveWidthFactor: 'number',
+    waveDepthFactor: 'number',
+    waveZOffset: 'number'
+  };
+
+  const overriddenParams = [];
+  
+  // Process each parameter from URL
+  Object.keys(scriptParams).forEach(paramName => {
+    // Check if this is a parameter we've defined
+    if (parameterDefinitions[paramName]) {
+      const paramType = parameterDefinitions[paramName];
+      const paramValue = scriptParams[paramName];
+      
+      // Special handling for different types
+      if (paramType === 'number') {
+        window[paramName] = parseFloat(paramValue);
+        overriddenParams.push(`${paramName}: ${window[paramName]}`);
+      } 
+      else if (paramType === 'boolean') {
+        window[paramName] = paramValue.toLowerCase() === 'true';
+        overriddenParams.push(`${paramName}: ${window[paramName]}`);
+      } 
+      else if (paramType === 'angle') {
+        // Convert degrees to radians and store
+        window[paramName] = parseFloat(paramValue) * (Math.PI / 180);
+        overriddenParams.push(`${paramName}: ${paramValue}° (${window[paramName]} rad)`);
+      }
+      else if (paramType === 'string') {
+        window[paramName] = paramValue;
+        overriddenParams.push(`${paramName}: ${window[paramName]}`);
+      }
+    }
+  });
+  
+  // Log which parameters were overridden
+  if (overriddenParams.length > 0) {
+    console.log('Parameters overridden via URL:', overriddenParams.join(', '));
+  }
+}
+
+// Apply parameter overrides
+applyParameterOverrides();
 
 // Access specific parameters
 if (scriptParams.v) {
   console.log('Version:', scriptParams.v);
 }
-
 
 // Initialize sections and calculate positions when DOM is loaded
 window.addEventListener("DOMContentLoaded", () => {
