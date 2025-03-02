@@ -46,7 +46,7 @@ let scrollY = window.scrollY;
 // Add variables for smooth scrolling
 let targetProgress = 0;
 let currentProgress = 0;
-let scrollEasing = 0.15; // Adjust this value to control smoothness (lower = smoother)
+let scrollEasing = 0.07; // Adjust this value to control smoothness (lower = smoother)
 
 // Apply initial wave property values when page loads
 window.addEventListener("DOMContentLoaded", () => {
