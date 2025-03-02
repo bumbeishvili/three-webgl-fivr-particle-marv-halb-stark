@@ -15,6 +15,10 @@ let distanceDarknessFactor = 1.80; // Controls how much particles darken based o
 let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
+// Animation control parameters
+let animationStartOffset = 0.2; // Start animation after scrolling 20% into section 1 (0-1)
+let animationEndSection = 1; // Which section to complete the animation at (1-based index)
+
 // Mouse follower circle parameters
 let mouseFollowerEnabled = true; // Toggle to enable/disable the mouse follower
 let mouseFollowerSize = 0.1; // Size of the circle that follows the mouse
@@ -48,7 +52,15 @@ let targetProgress = 0;
 let currentProgress = 0;
 let scrollEasing = 0.07; // Adjust this value to control smoothness (lower = smoother)
 
-// Apply initial wave property values when page loads
+// New variables for section-based scrolling
+let sectionElements = []; // Will hold the section elements
+let section1StartPosition = 0; // Position where section 1 starts (usually 0)
+let section2EndPosition = 0; // Position where section 2 ends
+
+
+
+
+// Initialize sections and calculate positions when DOM is loaded
 window.addEventListener("DOMContentLoaded", () => {
   // This ensures the wave properties use our master values defined at the top of the file
   setTimeout(() => {
@@ -56,7 +68,88 @@ window.addEventListener("DOMContentLoaded", () => {
     updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
     updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
     updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
+    
+    // Get all section elements - updated to use class selector
+    sectionElements = Array.from(document.querySelectorAll('.section'));
+    
+    // Calculate the position where animation should end (if sections exist)
+    if (sectionElements.length >= animationEndSection) {
+      section1StartPosition = 0; // Section 1 starts at top of page
+      
+      // Calculate section heights
+      let endPosition = 0;
+      for (let i = 0; i < animationEndSection; i++) {
+        endPosition += sectionElements[i].offsetHeight;
+      }
+      
+      // Update end position
+      section2EndPosition = endPosition;
+      
+      const section1Height = sectionElements[0].offsetHeight;
+      
+      // Calculate start position for animation
+      const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
+      
+      // Log for debugging
+      console.log("Animation starts at:", animationStartPosition);
+      console.log(`Animation ends at end of section ${animationEndSection}:`, section2EndPosition);
+      console.log("Animation length:", section2EndPosition - animationStartPosition);
+    }
   }, 100); // Small delay to ensure the particle system is initialized
+});
+
+// Update the recalculation on window resize
+window.addEventListener("resize", () => {
+  // Recalculate section positions on resize
+  if (sectionElements.length >= animationEndSection) {
+    section1StartPosition = 0; // Section 1 starts at top of page
+    
+    // Calculate section heights
+    let endPosition = 0;
+    for (let i = 0; i < animationEndSection; i++) {
+      endPosition += sectionElements[i].offsetHeight;
+    }
+    
+    // Update end position
+    section2EndPosition = endPosition;
+    
+    const section1Height = sectionElements[0].offsetHeight;
+    
+    // Calculate start position for animation
+    const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
+    
+    // Log for debugging
+    console.log("Animation starts at (resized):", animationStartPosition);
+    console.log(`Animation ends at end of section ${animationEndSection} (resized):`, section2EndPosition);
+  }
+});
+
+// Update scroll event handler to use section-based progress
+window.addEventListener("scroll", () => {
+  scrollY = window.scrollY;
+  
+  // Calculate progress based on section positions
+  if (section2EndPosition > 0) {
+    // Calculate the animation start position
+    const section1Height = sectionElements[0].offsetHeight;
+    const animationStartPosition = section1StartPosition + (section1Height * animationStartOffset);
+    
+    // Animation length is from start position to end of target section
+    const animationLength = section2EndPosition - animationStartPosition;
+    
+    // Calculate how far we've scrolled past the start position
+    const scrolledPastStart = Math.max(0, scrollY - animationStartPosition);
+    
+    // Progress will be 0 at the animation start position and 1 at the end of target section
+    const progress = Math.min(1, scrolledPastStart / animationLength);
+    
+    // Set the target progress (will be smoothly interpolated in animation loop)
+    targetProgress = progress;
+  } else {
+    // Fallback to original calculation if sections aren't found
+    const progress = (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
+    targetProgress = progress / 100;
+  }
 });
 
 // Add simple mouse move listener for camera animation
@@ -781,22 +874,6 @@ function initParticles() {
   
   scene.add(particles);
 }
-
-/**
- * Scroll event handler
- * Updates animation progress based on scroll position
- */
-window.addEventListener("scroll", () => {
-  scrollY = window.scrollY;
-
-  // Calculate progress percentage (0-100)
-  const progress =
-    (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) *
-    100;
-  
-  // Set the target progress (will be smoothly interpolated in animation loop)
-  targetProgress = progress / 100;
-});
 
 /**
  * Animation loop that updates every frame
