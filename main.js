@@ -20,7 +20,11 @@ let waveWidthFactor = 1.5; // Width of the wave pattern (X-axis spread)
 let waveDepthFactor = 6.0; // Depth of the wave pattern (Z-axis spread)
 let waveZOffset = 1.8; // Z-offset for the wave centered positioning
 
-
+// Mouse position for camera animation
+let mouseX = 0;
+let mouseY = 0;
+let targetMouseX = 0;
+let targetMouseY = 0;
 
 // Apply initial wave property values when page loads
 window.addEventListener("DOMContentLoaded", () => {
@@ -33,6 +37,12 @@ window.addEventListener("DOMContentLoaded", () => {
   }, 100); // Small delay to ensure the particle system is initialized
 });
 
+// Add simple mouse move listener for camera animation
+document.addEventListener('mousemove', (event) => {
+  // Calculate normalized mouse position (-1 to 1)
+  targetMouseX = (event.clientX / window.innerWidth) * 2 - 1;
+  targetMouseY = (event.clientY / window.innerHeight) * 2 - 1;
+});
 
 /**
  * Shaders
@@ -831,6 +841,29 @@ function animate() {
   // Update shader uniforms
   if (particles && particles.material.uniforms.uTime) {
     particles.material.uniforms.uTime.value = elapsedTime * waveSpeed;
+  }
+  
+  // Smooth mouse movement
+  mouseX += (targetMouseX - mouseX) * 0.05;
+  mouseY += (targetMouseY - mouseY) * 0.05;
+  
+  // Apply subtle camera movement based on mouse position
+  if (camera) {
+    // Starting position
+    const baseX = 0.8;
+    const baseY = 0.2;
+    const baseZ = 3.5;
+    
+    // Create subtle movement (adjust these values to change sensitivity)
+    const offsetX = mouseX * 0.15;
+    const offsetY = -mouseY * 0.10;
+    
+    // Apply to camera position
+    camera.position.x = baseX + offsetX;
+    camera.position.y = baseY + offsetY;
+    
+    // Keep looking at the center
+    camera.lookAt(0, 0, 0);
   }
   
   // Render the scene
