@@ -17,7 +17,12 @@ let distantHeightBoost = 1.2; // Controls extra darkening for particles that are
 
 // Animation control parameters
 let animationStartOffset = 0.2; // Start animation after scrolling 20% into section 1 (0-1)
-let animationEndSection = 2; // Which section to complete the animation at (1-based index)
+let animationEndSection = 1.5; // Which section to complete the animation at (1-based index)
+
+// Animation sequence control
+let mainAnimationEndProgress = 0.77; // The main movement animation completes at this scroll progress
+// Fade-out animation parameter
+let fadeOutStartProgress = 0.8; // Start fadeout animation at 90% of the scroll progress
 
 // Mouse follower circle parameters
 let mouseFollowerEnabled = false; // Toggle to enable/disable the mouse follower (set to false to disable)
@@ -94,6 +99,8 @@ window.addEventListener("DOMContentLoaded", () => {
       console.log("Animation starts at:", animationStartPosition);
       console.log(`Animation ends at end of section ${animationEndSection}:`, section2EndPosition);
       console.log("Animation length:", section2EndPosition - animationStartPosition);
+      console.log(`Main animation completes at ${mainAnimationEndProgress * 100}% of scroll progress`);
+      console.log(`Fade-out animation starts at ${fadeOutStartProgress * 100}% of scroll progress`);
     }
   }, 100); // Small delay to ensure the particle system is initialized
 });
@@ -121,6 +128,8 @@ window.addEventListener("resize", () => {
     // Log for debugging
     console.log("Animation starts at (resized):", animationStartPosition);
     console.log(`Animation ends at end of section ${animationEndSection} (resized):`, section2EndPosition);
+    console.log(`Main animation completes at ${mainAnimationEndProgress * 100}% of scroll progress`);
+    console.log(`Fade-out animation starts at ${fadeOutStartProgress * 100}% of scroll progress`);
   }
 });
 
@@ -145,6 +154,28 @@ window.addEventListener("scroll", () => {
     
     // Set the target progress (will be smoothly interpolated in animation loop)
     targetProgress = progress;
+    
+    // Enhanced debugging - log more frequently when we're in important animation phases
+    if (targetProgress > 0.75) {
+      // Calculate main animation completion percentage (0-100%)
+      const mainAnimProgress = Math.min(100, (targetProgress / mainAnimationEndProgress) * 100);
+      
+      // Determine which animation phase we're in
+      let phase = "Main animation";
+      if (targetProgress >= fadeOutStartProgress) {
+        phase = "Fade-out animation";
+      } else if (targetProgress >= mainAnimationEndProgress) {
+        phase = "Between main and fade-out";
+      }
+      
+      console.log(`Scroll progress: ${targetProgress.toFixed(2)}, Phase: ${phase}`);
+      console.log(`Main animation: ${mainAnimProgress.toFixed(1)}% complete`);
+      
+      if (targetProgress > fadeOutStartProgress) {
+        const visibilityFactor = 1.0 - ((targetProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress));
+        console.log(`Fade-out visibility: ${visibilityFactor.toFixed(2)} (1 = visible, 0 = invisible)`);
+      }
+    }
   } else {
     // Fallback to original calculation if sections aren't found
     const progress = (scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100;
@@ -187,6 +218,7 @@ const vertexShader = `
     uniform vec2 uResolution;
     uniform float uSize;
     uniform float uProgress;
+    uniform float uFadeOutProgress; // Fade-out progress uniform
     uniform float uWaveOffsetX;
     uniform float uWaveOffsetY;
     uniform float uWaveOffsetZ;
@@ -207,6 +239,7 @@ const vertexShader = `
     varying vec3 vColor;
     varying float vWaveHeight; // New varying to pass wave height to fragment shader
     varying float vDistanceFactor; // New varying to pass distance factor to fragment shader
+    varying float vFadeOutProgress; // Simplified - just pass the fade progress directly
     
     // Debug varyings
     varying vec3 vStaticPosition; // Original position before transformations
@@ -260,6 +293,9 @@ const vertexShader = `
         float duration = 0.4;
         float delay = (1.0 - duration) * noise * 1.2; // Slightly extended delay range for more staggering
         float end = delay + duration;
+        
+        // Simply pass the fade-out progress to the fragment shader
+        vFadeOutProgress = uFadeOutProgress;
         
         // Static position with offsets and rotation applied
         vec3 staticPosition = position;
@@ -372,10 +408,10 @@ const vertexShader = `
 
         // Normalize the distance factor (0-1 range, where 1 is furthest)
         // Adjust the divisor based on the scene scale
-        float normalizedDistance = clamp(distanceToCamera / 5.0, 0.0, 1.0);
+        float normalizedDistanceFactor = clamp(distanceToCamera / 5.0, 0.0, 1.0);
 
         // Apply a power curve to make the effect more dramatic at greater distances
-        float distanceFactor = pow(normalizedDistance, 1.2);
+        float distanceFactor = pow(normalizedDistanceFactor, 1.2);
         
         // Pass both height and distance factors to fragment shader
         vWaveHeight = normalizedVisualHeight * waveStrength;
@@ -405,6 +441,7 @@ const fragmentShader = `
     varying vec3 vColor;
     varying float vWaveHeight; // Receive wave height from vertex shader
     varying float vDistanceFactor; // Receive distance factor from vertex shader
+    varying float vFadeOutProgress; // Receive fade-out progress from vertex shader
     // Debug varyings
     varying vec3 vStaticPosition; // Original position before transformations
     varying vec3 vFinalPosition; // Final position after all transformations
@@ -492,6 +529,11 @@ const fragmentShader = `
             float distanceOpacityReduction = baseDistanceDarkness * 0.6;
             alpha *= (1.0 - distanceOpacityReduction);
         }
+        
+        // Apply the fade-out effect - simplified to use 1.0 - fadeOutProgress for a clean fade-out
+        // This ensures all particles fade out uniformly, with brighter colors visible longer
+        float fadeOutFactor = 1.0 - vFadeOutProgress; // Invert so 0 = no fade, 1 = full fade
+        alpha *= max(0.0, 1.0 - (fadeOutFactor * (1.0 + brightness))); // Brighter colors fade last
         
         // Output final color with dynamic components
         gl_FragColor = vec4(finalColor, alpha);
@@ -853,7 +895,8 @@ function initParticles() {
       uMousePosition: { value: mouseWorldPosition },
       uDisruptionRadius: { value: disruptionRadius },
       uDisruptionStrength: { value: disruptionStrength },
-      uDisruptionFalloff: { value: disruptionFalloff }
+      uDisruptionFalloff: { value: disruptionFalloff },
+      uFadeOutProgress: { value: 0.0 } // Initialize fade-out progress
     },
     transparent: true,
     depthWrite: false, // Disable depth writing for additive blending
@@ -887,10 +930,33 @@ function animate() {
   
   // Update particle animation progress with smoothed value
   if (particles) {
-    particles.material.uniforms.uProgress.value = currentProgress;
+    // Calculate the main animation progress (0-1 from start to mainAnimationEndProgress)
+    // This ensures the main animation runs at a consistent pace regardless of fadeOutStartProgress
+    const mainProgress = Math.min(1.0, currentProgress / mainAnimationEndProgress);
+    particles.material.uniforms.uProgress.value = mainProgress;
     
-    // Calculate blend transition from additive to normal blending using the smoothed progress
-    const blendProgress = Math.max(0, Math.min(1, (currentProgress - 0.4) / 0.3));
+    // Calculate fade-out progress
+    // Only start fading out after the main animation has completed (after mainAnimationEndProgress)
+    let fadeOutProgress = 1.0; // Default: fully visible
+    
+    if (currentProgress > fadeOutStartProgress) {
+      // Map fadeOutStartProgress-100% to 1-0 range for fade-out (1 = visible, 0 = invisible)
+      fadeOutProgress = 1.0 - ((currentProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress));
+      
+      // Add a smooth curve to make the fade-out more natural
+      fadeOutProgress = fadeOutProgress * fadeOutProgress; // Simple quadratic easing
+      
+      // Add debug logging to verify fade-out is happening
+      if (Math.random() < 0.005) { // Reduced logging frequency
+        console.log(`Fade-out active: ${(1.0 - fadeOutProgress).toFixed(3)}, visibility: ${fadeOutProgress.toFixed(3)}`);
+      }
+    }
+    
+    // Update the uniform value
+    particles.material.uniforms.uFadeOutProgress.value = fadeOutProgress;
+    
+    // Calculate blend transition from additive to normal blending using main progress
+    const blendProgress = Math.max(0, Math.min(1, (mainProgress - 0.4) / 0.3));
     
     // Apply smoothstep easing to the blend transition for better smoothing
     const smoothBlendProgress = blendProgress * blendProgress * (3 - 2 * blendProgress);
@@ -922,22 +988,22 @@ function animate() {
     let easedProgress;
     
     // Apply a gradual rotation that builds up throughout the scroll
-    if (currentProgress >= 0.6) { // Start rotation at 60% scroll (after wave transition completes)
+    if (mainProgress >= 0.6) { // Start rotation at 60% of main progress (after wave transition completes)
       // Normalize progress to 0-1 range for the Y rotation animation (60%-100%)
-      const normalizedProgress = (currentProgress - 0.6) / 0.4;
+      const normalizedProgress = (mainProgress - 0.6) / 0.4;
       
       let yEasedProgress;
       
       // Store phase1Progress for reuse
-      const phase1Progress = currentProgress < 0.8 ? (currentProgress - 0.6) / 0.2 : 1.0; // 0-1 within phase 1
+      const phase1Progress = mainProgress < 0.8 ? (mainProgress - 0.6) / 0.2 : 1.0; // 0-1 within phase 1
       
-      if (currentProgress < 0.8) {
+      if (mainProgress < 0.8) {
         // Use a gentler cubic ease-out for slower buildup
         // This curve will reach 0.5 (10 degrees) at the end of phase 1
         yEasedProgress = 0.5 * (3 * Math.pow(phase1Progress, 2) - 2 * Math.pow(phase1Progress, 3));
       } else {
         // Phase 2: Normalize to 0-1 range for 80-100% scroll
-        const phase2Progress = (currentProgress - 0.8) / 0.2; // 0-1 within phase 2
+        const phase2Progress = (mainProgress - 0.8) / 0.2; // 0-1 within phase 2
         
         // Start from 0.5 (10 degrees) and build to 1.0 (20 degrees)
         // Use a smooth quadratic curve for acceleration
@@ -949,9 +1015,9 @@ function animate() {
       
       // Calculate X rotation that starts at 80% scroll and reaches 5 degrees at 100%
       let xRotationProgress = 0;
-      if (currentProgress >= 0.8) {
+      if (mainProgress >= 0.8) {
         // Normalize to 0-1 range for 80-100% scroll
-        const xNormalizedProgress = (currentProgress - 0.8) / 0.2;
+        const xNormalizedProgress = (mainProgress - 0.8) / 0.2;
         
         // Use a cubic ease-in for smooth start of X rotation
         xRotationProgress = Math.pow(xNormalizedProgress, 3);
