@@ -421,6 +421,16 @@ const vertexShader = `
         // Simply transition directly from static position to target
         vec3 finalPosition = mix(staticPosition, targetPosition, assemblyProgress);
         
+        // Add subtle wave effect to all particles after 50% progress
+        if (uProgress > 0.5) {  // Removed front-facing check to apply to all particles
+            // Calculate wave strength that increases after 50%
+            float lateWaveStrength = smoothstep(0.5, 0.8, uProgress) * 0.03;
+            
+            // Add simple sine wave motion only in z-direction (front/back)
+            // Use x and y positions to create varied wave pattern
+            finalPosition.z += sin(uTime * 0.6 + targetPosition.x * 4.0 + targetPosition.y * 4.0) * lateWaveStrength;
+        }
+        
         // Save finalPosition after all transformations but before model matrix
         vFinalPosition = finalPosition;
         
