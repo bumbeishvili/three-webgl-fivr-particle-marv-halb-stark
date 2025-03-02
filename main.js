@@ -11,7 +11,7 @@ let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wa
 let waveRotationZ = 0.0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
-let distanceDarknessFactor = 0.80; // Controls how much particles darken based on distance (0-1)
+let distanceDarknessFactor = 1.80; // Controls how much particles darken based on distance (0-1)
 let heightDarknessFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
@@ -441,7 +441,7 @@ for (let i = 0; i < particlesCount; i++) {
         // Inner 50% - normal gradient from dark blue to light blue
         gridColor = new THREE.Color().lerpColors(
             new THREE.Color("#0452D5"),  // Dark blue
-            new THREE.Color("#63BEF4"),  // Light blue to match X shape
+            new THREE.Color("#a9ddfb"),  // Light blue to match X shape
             enhancedZ                    // Enhanced normalized distance value
         );
     }
