@@ -5,16 +5,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const isDevelopment = false;
 
 // Global configuration
-const waveSpeed = 1.5; // Set to 0 to disable wave animations
-let waveOffsetX = -0.35; // Master X offset value
-let waveOffsetY = -0.3; // Master Y offset value 
-let waveOffsetZ = -1.15; // Master Z offset value
+const waveSpeed = 0.8; // Set to 0 to disable wave animations
+let waveOffsetX = 0.1; // Master X offset value
+let waveOffsetY = -0.1; // Master Y offset value 
+let waveOffsetZ = -0.2; // Master Z offset value
 let waveRotationX = 0.73 * (Math.PI / 180); // Controls the X rotation of the wave pattern (radians)
 let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wave pattern (radians)
 let waveRotationZ = .0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
-let distanceOpacityFactor = 1.80; // Controls how much particles darken based on distance (0-1)
+let distanceOpacityFactor = 2.80; // Controls how much particles darken based on distance (0-1)
 let heightOpacityFactor = 0.8; // Controls how much particles darken based on height (0-2)
 let distantHeightOpacityBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
@@ -28,9 +28,10 @@ let mainAnimationEndProgress = 0.57; // The main movement animation completes at
 let fadeOutStartProgress = 0.6; // Start fadeout animation at 90% of the scroll progress
 
 // Wave density controls - these parameters affect how the particles are arranged
-let waveWidthFactor = 1.7; // Width of the wave pattern (X-axis spread)
-let waveDepthFactor = 6.0; // Depth of the wave pattern (Z-axis spread)
+let waveWidthFactor = 2; // Width of the wave pattern (X-axis spread)
+let waveDepthFactor = 3.0; // Depth of the wave pattern (Z-axis spread)
 let waveZOffset = 1.8; // Z-offset for the wave centered positioning
+let gridRatio = 2 // Ratio between width and height of the grid (1 = square)
 
 // Mouse position for camera animation
 let mouseX = 0;
@@ -105,7 +106,8 @@ function applyParameterOverrides() {
     // Wave density parameters
     waveWidthFactor: 'number',
     waveDepthFactor: 'number',
-    waveZOffset: 'number'
+    waveZOffset: 'number',
+    gridRatio: 'number'
   };
 
   const overriddenParams = [];
@@ -272,6 +274,24 @@ document.addEventListener('mousemove', (event) => {
   targetMouseY = (event.clientY / window.innerHeight) * 2 - 1;
 });
 
+// Add keypress handler for testing gridRatio
+document.addEventListener('keydown', (event) => {
+  // Press 1 to set gridRatio to 1 (square)
+  if (event.key === '1') {
+    updateGridRatio(1);
+    console.log('Grid ratio set to 1:1 (square)');
+  }
+  // Press 2 to set gridRatio to 2 (2:1 rectangle)
+  else if (event.key === '2') {
+    updateGridRatio(2);
+    console.log('Grid ratio set to 2:1 (rectangle)');
+  }
+  // Press 3 to set gridRatio to 0.5 (1:2 rectangle)
+  else if (event.key === '3') {
+    updateGridRatio(0.5);
+    console.log('Grid ratio set to 1:2 (rectangle)');
+  }
+});
 
 /**
  * Shaders
@@ -645,17 +665,22 @@ const gridColors = new Float32Array(particlesCount * 3); // Add array for grid c
  * With elevated sides and lower middle to match the reference image
  * Rotated around Y-axis to match the visual orientation in the image
  */
-const gridSize = Math.ceil(Math.sqrt(particlesCount)); // Calculate grid dimensions
+// Calculate grid dimensions using gridRatio
+const gridHeight = Math.ceil(Math.sqrt(particlesCount / gridRatio));
+const gridWidth = Math.ceil(gridHeight * gridRatio);
+
+console.log(`Initial grid dimensions: ${gridWidth}x${gridHeight}, ratio: ${gridRatio}`);
+
 for (let i = 0; i < particlesCount; i++) {
   const i3 = i * 3;
 
-  // Calculate grid positions
-  const row = Math.floor(i / gridSize);
-  const col = i % gridSize;
+  // Calculate grid positions with separate width and height
+  const row = Math.floor(i / gridWidth);
+  const col = i % gridWidth;
 
   // Convert grid coordinates to world space using density control parameters
-  const x = (col / gridSize - 0.5) * waveWidthFactor;
-  const z = (row / gridSize - 0.5) * waveDepthFactor;
+  const x = (col / gridWidth - 0.5) * waveWidthFactor;
+  const z = (row / gridHeight - 0.5) * waveDepthFactor;
 
   // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
   // We need to do this before applying rotation to match initParticles
@@ -978,6 +1003,9 @@ function initParticles() {
   particles.renderOrder = 0;
 
   scene.add(particles);
+  
+  // Update with current gridRatio to ensure consistent appearance
+  updateGridRatio(gridRatio);
 }
 
 /**
@@ -1197,21 +1225,28 @@ function updateWaveRotations(x, y, z) {
  * Updates the wave density parameters
  */
 function updateWaveDensity(width, depth, zOffset) {
-  // Update global wave density variables
   waveWidthFactor = Math.max(0.5, width); // Ensure minimum width
   waveDepthFactor = Math.max(1.0, depth); // Ensure minimum depth
-  waveZOffset = Math.max(0.0, zOffset); // Ensure non-negative z-offset
+  waveZOffset = zOffset;
 
-  // Regenerate particles with new density parameters
-  regenerateParticles();
+  // Recalculate wave positions with new parameters
+  regenerateParticles(gridRatio);
+}
+
+function updateGridRatio(ratio) {
+  gridRatio = Math.max(0.1, ratio); // Ensure minimum ratio
+  regenerateParticles(gridRatio);
 }
 
 /**
  * Regenerates particles with current wave density parameters
  * This recalculates positions while preserving particle attributes and animation state
  */
-function regenerateParticles() {
+function regenerateParticles(ratioParam = null) {
   if (!particles) return; // Skip if particles don't exist yet
+  
+  // Use provided ratio or fall back to global gridRatio
+  const useRatio = ratioParam !== null ? ratioParam : gridRatio;
 
   // Store current progress and material properties
   const currentProgress = particles.material.uniforms.uProgress.value;
@@ -1233,18 +1268,26 @@ function regenerateParticles() {
   const lightBlue = new THREE.Color("#63BEF4");
 
   // Recalculate positions with new wave density parameters
-  const gridSize = Math.ceil(Math.sqrt(positions.length / 3));
+  const totalPoints = positions.length / 3;
+  
+  // Calculate grid dimensions for a non-square grid based on gridRatio
+  // For example, if gridRatio is 2, we want a grid that's twice as wide as it is tall
+  const gridHeight = Math.ceil(Math.sqrt(totalPoints / useRatio));
+  const gridWidth = Math.ceil(gridHeight * useRatio);
+
+  // Log for debugging
+  console.log(`Grid dimensions: ${gridWidth}x${gridHeight}, ratio: ${useRatio}`);
 
   for (let i = 0; i < positions.length / 3; i++) {
     const i3 = i * 3;
 
-    // Calculate grid positions
-    const row = Math.floor(i / gridSize);
-    const col = i % gridSize;
+    // Calculate grid positions with separate width and height dimensions
+    const row = Math.floor(i / gridWidth);
+    const col = i % gridWidth;
 
     // Convert grid coordinates to world space using density control parameters
-    const x = (col / gridSize - 0.5) * waveWidthFactor;
-    const z = (row / gridSize - 0.5) * waveDepthFactor;
+    const x = (col / gridWidth - 0.5) * waveWidthFactor;
+    const z = (row / gridHeight - 0.5) * waveDepthFactor;
 
     // CALCULATE GRID COLORS BASED ON ORIGINAL (PRE-ROTATION) Z POSITION
     // We need to do this before applying rotation to match initParticles
@@ -1270,15 +1313,15 @@ function regenerateParticles() {
 
       // Create a smooth transition between dark blue and black
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#0452D5"),  // Dark blue
+        new THREE.Color("#478afd"),  // Dark blue
         new THREE.Color("#000000"),  // Pure black
         Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
       );
     } else {
       // Inner 50% - normal gradient from dark blue to light blue
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#0452D5"),  // Dark blue
-        new THREE.Color("#63BEF4"),  // Light blue to match X shape
+        new THREE.Color("#478afd"),  // Dark blue
+        new THREE.Color("#a0dbfe"),  // Light blue to match X shape
         enhancedZ                    // Enhanced normalized distance value
       );
     }
@@ -1290,12 +1333,12 @@ function regenerateParticles() {
 
     // Only modify the grid sizes (aSize), not the X shape sizes (aTargetSize)
     // This ensures X shape sizes remain intact during transitions
-    sizes[i] = 0.7 + enhancedZ * 0.6 + (Math.random() * 0.1);
+    sizes[i] = 0.5 + enhancedZ * 0.6 + (Math.random() * 0.1);
 
     // Create a U-shaped wave effect (static, no animation)
     const parabolicFactor = 0.25;
     const baseSineWave = Math.sin(x * Math.PI - Math.PI / 2) * 0.18;
-    const uShapeComponent = parabolicFactor * (x * x * 2.0);
+    const uShapeComponent = parabolicFactor * (x * x * 0.2);
 
     // Combine the components for static shape
     const y = baseSineWave + uShapeComponent + z * 0.15;
