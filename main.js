@@ -1313,15 +1313,15 @@ function regenerateParticles(ratioParam = null) {
 
       // Create a smooth transition between dark blue and black
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#478afd"),  // Dark blue
+        new THREE.Color("#6fa4ff"),  // Dark blue
         new THREE.Color("#000000"),  // Pure black
         Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
       );
     } else {
       // Inner 50% - normal gradient from dark blue to light blue
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#478afd"),  // Dark blue
-        new THREE.Color("#a0dbfe"),  // Light blue to match X shape
+        new THREE.Color("#5593fe"),  // Dark blue
+        new THREE.Color("#c2e8ff"),  // Light blue to match X shape
         enhancedZ                    // Enhanced normalized distance value
       );
     }
