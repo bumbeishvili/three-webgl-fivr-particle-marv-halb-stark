@@ -56,10 +56,10 @@ let backgroundGradient = null;
 
 // This technique allows a JavaScript file to read its own query parameters
 function getScriptParams() {
-  const currentScript = Array.from(document.getElementsByTagName('script')).map(d=>d.src).find(d=>d.includes('bumbeishvili'))
+  const currentScript = Array.from(document.getElementsByTagName('script')).map(d => d.src).find(d => d.includes('bumbeishvili'))
 
-  if(!currentScript) return {}
- 
+  if (!currentScript) return {}
+
   // Parse the URL
   const url = new URL(currentScript);
 
@@ -90,19 +90,19 @@ function applyParameterOverrides() {
     waveRotationX: 'angle', // Special handling for angles in degrees
     waveRotationY: 'angle',
     waveRotationZ: 'angle',
-    
+
     // Darkness effect parameters
     distanceOpacityFactor: 'number',
     heightOpacityFactor: 'number',
     distantHeightOpacityBoost: 'number',
-    
+
     // Animation parameters
     animationStartOffset: 'number',
     animationEndSection: 'number',
     mainAnimationEndProgress: 'number',
     fadeOutStartProgress: 'number',
     scrollEasing: 'number',
-    
+
     // Wave density parameters
     waveWidthFactor: 'number',
     waveDepthFactor: 'number',
@@ -111,23 +111,23 @@ function applyParameterOverrides() {
   };
 
   const overriddenParams = [];
-  
+
   // Process each parameter from URL
   Object.keys(scriptParams).forEach(paramName => {
     // Check if this is a parameter we've defined
     if (parameterDefinitions[paramName]) {
       const paramType = parameterDefinitions[paramName];
       const paramValue = scriptParams[paramName];
-      
+
       // Special handling for different types
       if (paramType === 'number') {
         window[paramName] = parseFloat(paramValue);
         overriddenParams.push(`${paramName}: ${window[paramName]}`);
-      } 
+      }
       else if (paramType === 'boolean') {
         window[paramName] = paramValue.toLowerCase() === 'true';
         overriddenParams.push(`${paramName}: ${window[paramName]}`);
-      } 
+      }
       else if (paramType === 'angle') {
         // Convert degrees to radians and store
         window[paramName] = parseFloat(paramValue) * (Math.PI / 180);
@@ -139,7 +139,7 @@ function applyParameterOverrides() {
       }
     }
   });
-  
+
   // Log which parameters were overridden
   if (overriddenParams.length > 0 && isDevelopment) {
     console.log('Parameters overridden via URL:', overriddenParams.join(', '));
@@ -186,15 +186,15 @@ window.addEventListener("resize", () => {
   sceneSize.width = window.innerWidth;
   sceneSize.height = window.innerHeight;
   sceneSize.pixelRatio = Math.min(window.devicePixelRatio, 2);
-  
+
   // Update camera aspect ratio
   camera.aspect = sceneSize.width / sceneSize.height;
   camera.updateProjectionMatrix();
-  
+
   // Update renderer size
   renderer.setSize(sceneSize.width, sceneSize.height);
   renderer.setPixelRatio(sceneSize.pixelRatio);
-  
+
   // Update particle uniforms if they exist
   if (particles && particles.material && particles.material.uniforms) {
     // Use the same format as in the initial setup
@@ -202,14 +202,14 @@ window.addEventListener("resize", () => {
       sceneSize.width * sceneSize.pixelRatio,
       sceneSize.height * sceneSize.pixelRatio
     );
-    
+
     // Use the shared function for point size calculation
     particles.material.uniforms.uSize.value = calculatePointSize();
-    
+
     // Make sure the material knows it's been updated
     particles.material.needsUpdate = true;
   }
-  
+
   // Recalculate section positions on resize
   if (sectionElements.length >= animationEndSection) {
     section1StartPosition = 0; // Section 1 starts at top of page
@@ -770,11 +770,11 @@ function calculatePointSize() {
   // Base size for a reference width of 1920px
   const baseSize = 0.026;
   const referenceWidth = 1920;
-  
+
   // Scale factor that increases size on smaller screens and decreases on larger screens
   // The power value of 0.4 makes the scaling more gradual
   const scaleFactor = Math.pow(referenceWidth / window.innerWidth, 0.4);
-  
+
   return baseSize * scaleFactor;
 }
 
@@ -818,7 +818,7 @@ function initParticles() {
 
     // Get target positions from the X model
     let targetX = xShape.array[i3];
-    let targetY = xShape.array[i3 + 1] ; // Scale Y coordinate by 1.1 for a taller X shape
+    let targetY = xShape.array[i3 + 1]; // Scale Y coordinate by 1.1 for a taller X shape
     let targetZ = xShape.array[i3 + 2];
 
     // DETERMINE FRONT/BACK/SIDE BASED ON PRE-ROTATION POSITIONS
@@ -862,7 +862,7 @@ function initParticles() {
     // SIZE CALCULATION BASED ON POSITION
     // More dramatic size difference between center and edges
     const particleSize = isFront ?
-      (0.4 + (normalizedDist * 0.5)*1.6 + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
+      (0.4 + (normalizedDist * 0.5) * 1.6 + (Math.random() * 0.1)) : // Front: Gradient from 0.8 to 1.3
       (0.4 + (Math.random() * 0.1)); // Back: Smaller than before
 
     // Store X shape sizes separately from grid sizes
@@ -1003,7 +1003,7 @@ function initParticles() {
   particles.renderOrder = 0;
 
   scene.add(particles);
-  
+
   // Update with current gridRatio to ensure consistent appearance
   updateGridRatio(gridRatio);
 }
@@ -1164,19 +1164,19 @@ function animate() {
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
 
- 
+
   }
 
   // Handle fadeout animation if we've reached that threshold
   if (targetProgress >= fadeOutStartProgress) {
     const fadeOutProgress = Math.max(0, Math.min(1, (1.0 - ((targetProgress - fadeOutStartProgress) / (1.0 - fadeOutStartProgress)))));
-    
+
     // Get background gradient element if not already cached
     if (!backgroundGradient) backgroundGradient = document.querySelector('.background-gradient-gl');
-    
+
     // Synchronize background opacity with particle fadeout
     if (backgroundGradient) backgroundGradient.style.opacity = fadeOutProgress;
-    
+
     // ... existing fade animation code ...
   } else {
     // Ensure background is fully visible before fade starts
@@ -1216,7 +1216,7 @@ function updateWaveRotations(x, y, z) {
   waveRotationZ = z;
 
   // Update uniform values if the material exists
-  if (particles && particles.material && particles.material.uniforms) {
+  if (particles && particles.material && particles.material.uniforms && particles.material.uniforms.waveRotation) {
     particles.material.uniforms.waveRotation.value.set(x, y, z);
   }
 }
@@ -1244,7 +1244,7 @@ function updateGridRatio(ratio) {
  */
 function regenerateParticles(ratioParam = null) {
   if (!particles) return; // Skip if particles don't exist yet
-  
+
   // Use provided ratio or fall back to global gridRatio
   const useRatio = ratioParam !== null ? ratioParam : gridRatio;
 
@@ -1269,7 +1269,7 @@ function regenerateParticles(ratioParam = null) {
 
   // Recalculate positions with new wave density parameters
   const totalPoints = positions.length / 3;
-  
+
   // Calculate grid dimensions for a non-square grid based on gridRatio
   // For example, if gridRatio is 2, we want a grid that's twice as wide as it is tall
   const gridHeight = Math.ceil(Math.sqrt(totalPoints / useRatio));
