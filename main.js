@@ -150,6 +150,37 @@ function applyParameterOverrides() {
 applyParameterOverrides();
 
 
+// Initialize sections and calculate positions when DOM is loaded
+window.addEventListener("DOMContentLoaded", () => {
+  // This ensures the wave properties use our master values defined at the top of the file
+  setTimeout(() => {
+    // return;
+    // Simply use the master values defined at the top of this file
+    // updateWaveOffsets(waveOffsetX, waveOffsetY, waveOffsetZ);
+    // updateWaveRotations(waveRotationX, waveRotationY, waveRotationZ);
+    // updateWaveDensity(waveWidthFactor, waveDepthFactor, waveZOffset);
+
+    // Get all section elements - updated to use class selector
+    sectionElements = Array.from(document.querySelectorAll('section'));
+
+    // Calculate the position where animation should end (if sections exist)
+    if (sectionElements.length >= animationEndSection) {
+      section1StartPosition = 0; // Section 1 starts at top of page
+
+      // Calculate section heights
+      let endPosition = 0;
+      for (let i = 0; i < animationEndSection; i++) {
+        endPosition += sectionElements[i].offsetHeight;
+      }
+
+      // Update end position
+      section2EndPosition = endPosition;
+
+
+    }
+  }, 100); // Small delay to ensure the particle system is initialized
+});
+
 // Update the recalculation on window resize
 window.addEventListener("resize", () => {
   // Update sceneSize values
