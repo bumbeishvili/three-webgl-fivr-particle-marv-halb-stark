@@ -177,7 +177,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
 
     }
-  }, 200); // Small delay to ensure the particle system is initialized
+  }, 100); // Small delay to ensure the particle system is initialized
 });
 
 // Update the recalculation on window resize
