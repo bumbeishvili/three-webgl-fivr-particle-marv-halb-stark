@@ -574,6 +574,23 @@ const fragmentShader = `
         // Apply height darkness factor to adjust the strength of height-based fading
         fadeFactor = min(1.0, fadeFactor * uHeightOpacityFactor);
         
+        // Create a smooth transition for the darkening effect based on progress
+        // Gradually reduce darkening from 40% to 70% progress 
+        if (uProgress > 0.7) {
+            // After 70% progress, no darkening
+            fadeFactor = 0.0;
+        } else if (uProgress > 0.4) {
+            // Between 40% and 70% progress, smoothly reduce darkening
+            // Map 0.4-0.7 to 0-1 range for transition
+            float transitionProgress = (uProgress - 0.4) / 0.3;
+            
+            // Apply smoothstep for even smoother transition curve
+            float smoothTransitionFactor = 1.0 - (transitionProgress * transitionProgress * (3.0 - 2.0 * transitionProgress));
+            
+            // Apply transition
+            fadeFactor *= smoothTransitionFactor;
+        }
+        
         // Fade color to black based on combined height and distance factors
         finalColor = mix(finalColor, vec3(0.0, 0.0, 0.0), fadeFactor);
         
@@ -1047,30 +1064,33 @@ function animate() {
     particles.material.uniforms.uFadeOutProgress.value = fadeOutProgress;
 
     // Calculate blend transition from additive to normal blending using main progress
-    const blendProgress = Math.max(0, Math.min(1, (mainProgress - 0.4) / 0.3));
+    // Expand the transition window slightly to make it more gradual (from 0.4-0.7 to 0.35-0.75)
+    const blendProgress = Math.max(0, Math.min(1, (mainProgress - 0.35) / 0.4));
 
-    // Apply smoothstep easing to the blend transition for better smoothing
+    // Apply a stronger smoothstep easing to the blend transition for better smoothing
+    // This cubic smoothstep creates a more gradual S-curve
     const smoothBlendProgress = blendProgress * blendProgress * (3 - 2 * blendProgress);
     particles.material.uniforms.uBlendTransition.value = smoothBlendProgress;
 
-    // Create a wider transition window for blending mode switches (50%-60% instead of exactly 50%)
+    // Create a wider transition window for blending mode switches
     // This staggers the changes to avoid all changes happening at once
-    if (blendProgress > 0.6 && particles.material.blending === THREE.AdditiveBlending) {
-      // Switch to normal blending at 60% of the transition (58% of scroll)
+    // Move the actual mode switch point to 65% (instead of 60%) of the transition for smoother effect
+    if (blendProgress > 0.65 && particles.material.blending === THREE.AdditiveBlending) {
+      // Switch to normal blending at 65% of the transition (~60% of scroll)
       particles.material.blending = THREE.NormalBlending;
       particles.material.needsUpdate = true; // Important: update material after changing blending
-    } else if (blendProgress <= 0.4 && particles.material.blending === THREE.NormalBlending) {
-      // Switch back to additive blending at 40% of the transition (52% of scroll)
+    } else if (blendProgress <= 0.35 && particles.material.blending === THREE.NormalBlending) {
+      // Switch back to additive blending at 35% of the transition (~48% of scroll)
       particles.material.blending = THREE.AdditiveBlending;
       particles.material.needsUpdate = true; // Important: update material after changing blending
     }
 
     // Handle depth writing separately with a slightly different threshold
-    // This staggers the changes to avoid everything happening at once
-    if (blendProgress > 0.55 && particles.material.depthWrite === false) {
+    // Move this threshold to align better with the new blending transition window
+    if (blendProgress > 0.6 && particles.material.depthWrite === false) {
       particles.material.depthWrite = true; // Enable depth writing
       particles.material.needsUpdate = true;
-    } else if (blendProgress <= 0.45 && particles.material.depthWrite === true) {
+    } else if (blendProgress <= 0.4 && particles.material.depthWrite === true) {
       particles.material.depthWrite = false; // Disable depth writing
       particles.material.needsUpdate = true;
     }
