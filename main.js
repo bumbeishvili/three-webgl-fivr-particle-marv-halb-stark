@@ -8,18 +8,18 @@ const isDevelopment = false;
 const waveSpeed = 0.8; // Set to 0 to disable wave animations
 let waveOffsetX = 0.1; // Master X offset value
 let waveOffsetY = -0.1; // Master Y offset value 
-let waveOffsetZ = -0.2; // Master Z offset value
+let waveOffsetZ = -0.1; // Master Z offset value
 let waveRotationX = 0.73 * (Math.PI / 180); // Controls the X rotation of the wave pattern (radians)
 let waveRotationY = 5.73 * (Math.PI / 180); // Controls the Y rotation of the wave pattern (radians)
 let waveRotationZ = .0; // Controls the Z rotation of the wave pattern (radians)
 
 // Darkness effect controls - adjust these to control different aspects of the darkening effect
-let distanceOpacityFactor = 2.80; // Controls how much particles darken based on distance (0-1)
-let heightOpacityFactor = 0.8; // Controls how much particles darken based on height (0-2)
+let distanceOpacityFactor = 2.0; // Controls how much particles darken based on distance (0-1)
+let heightOpacityFactor = 1.2; // Controls how much particles darken based on height (0-2)
 let distantHeightOpacityBoost = 1.2; // Controls extra darkening for particles that are both high and distant (0-2)
 
 // Animation control parameters
-let animationStartOffset = 0.2; // Start animation after scrolling 20% into section 1 (0-1)
+let animationStartOffset = 0.05; // Start animation after scrolling 20% into section 1 (0-1)
 let animationEndSection = 1.5; // Which section to complete the animation at (1-based index)
 
 // Animation sequence control
@@ -28,10 +28,10 @@ let mainAnimationEndProgress = 0.57; // The main movement animation completes at
 let fadeOutStartProgress = 0.6; // Start fadeout animation at 90% of the scroll progress
 
 // Wave density controls - these parameters affect how the particles are arranged
-let waveWidthFactor = 2; // Width of the wave pattern (X-axis spread)
+let waveWidthFactor = 1.9; // Width of the wave pattern (X-axis spread)
 let waveDepthFactor = 3.0; // Depth of the wave pattern (Z-axis spread)
 let waveZOffset = 1.8; // Z-offset for the wave centered positioning
-let gridRatio = 2 // Ratio between width and height of the grid (1 = square)
+let gridRatio = 3 // Ratio between width and height of the grid (1 = square)
 
 // Mouse position for camera animation
 let mouseX = 0;
@@ -384,8 +384,8 @@ const vertexShader = `
         vec3 staticPosition = position;
         
         // Apply wave animation to grid state (when uProgress is low)
-        // The wave effect weakens as we transition to the X shape
-        float waveStrength = 1.0 - smoothstep(0.0, 0.6, uProgress);
+        // MODIFIED: Keep wave effect at full strength until 60% progress, then fade out quickly
+        float waveStrength = 1.0 - smoothstep(0.6, 0.8, uProgress);
         
         // Base position for wave calculation (use original position without rotation/offset)
         vec3 waveBasePos = position;
@@ -409,7 +409,7 @@ const vertexShader = `
         float waveZ = waveZ1 + waveZ2; // Remove the excessive multiplier
         
         // Calculate wave displacements
-        vec3 waveDisplacement = vec3(waveX, waveY, waveZ);
+        vec3 waveDisplacement = vec3(waveX, waveY*1.+0.2, waveZ);
         
         // Apply the wave displacement to position
         staticPosition = waveBasePos + waveDisplacement * waveStrength;
@@ -715,7 +715,7 @@ for (let i = 0; i < particlesCount; i++) {
     // Inner 50% - normal gradient from dark blue to light blue
     gridColor = new THREE.Color().lerpColors(
       new THREE.Color("#0452D5"),  // Dark blue
-      new THREE.Color("#d5edfb"),  // Light blue to match X shape
+      new THREE.Color("#eeeeee"),  // Light blue to match X shape
       enhancedZ                    // Enhanced normalized distance value
     );
   }
@@ -749,7 +749,7 @@ for (let i = 0; i < particlesCount; i++) {
 
   // Set particle size based on color gradient (enhancedZ) - similar to X shape sizing
   // Particles with lighter colors (higher Z) will be larger, darker ones smaller
-  particleSizes[i] = 0.6 //+ enhancedZ * 0.6 + (Math.random() * 0.1);
+  particleSizes[i] = 0.3; // REDUCED FROM 0.6 to make wave particles smaller
 }
 
 /**
@@ -1314,15 +1314,15 @@ function regenerateParticles(ratioParam = null) {
 
       // Create a smooth transition between dark blue and black
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#6fa4ff"),  // Dark blue
-        new THREE.Color("#000000"),  // Pure black
+        new THREE.Color("#97bdff"),  // Dark blue
+        new THREE.Color("#00276a"),  // Pure black
         Math.pow(fadeToBlack, 1.5)   // Power curve for smoother transition
       );
     } else {
       // Inner 50% - normal gradient from dark blue to light blue
       gridColor = new THREE.Color().lerpColors(
-        new THREE.Color("#5593fe"),  // Dark blue
-        new THREE.Color("#c2e8ff"),  // Light blue to match X shape
+        new THREE.Color("#97bdff"),  // Dark blue
+        new THREE.Color("#ffffff"),  // Light blue to match X shape
         enhancedZ                    // Enhanced normalized distance value
       );
     }
@@ -1334,7 +1334,7 @@ function regenerateParticles(ratioParam = null) {
 
     // Only modify the grid sizes (aSize), not the X shape sizes (aTargetSize)
     // This ensures X shape sizes remain intact during transitions
-    sizes[i] = 0.5 + enhancedZ * 0.6 + (Math.random() * 0.1);
+    sizes[i] = 0.3; // REDUCED FROM 0.6 to make wave particles smaller
 
     // Create a U-shaped wave effect (static, no animation)
     const parabolicFactor = 0.25;
