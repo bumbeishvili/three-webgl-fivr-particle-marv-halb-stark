@@ -606,6 +606,68 @@ const fragmentShader = `
         // Calculate color brightness (higher for white, lower for dark colors)
         float brightness = (finalColor.r + finalColor.g + finalColor.b) / 3.0;
         
+        // Moving reflection effect that sweeps from top to bottom around 80% progress
+        if (uProgress >= 0.78 && uProgress <= 0.85) {
+            // Calculate normalized progress for the reflection animation (0-1)
+            float reflectionProgress = (uProgress - 0.78) / 0.07;
+            
+            // First reflection pass
+            // Calculate the current Y position of the reflection band
+            float reflectionY1 = 0.8 - reflectionProgress * 1.6;
+            
+            // Create a band with smooth edges
+            float distanceFromBand1 = abs(vFinalPosition.y - reflectionY1);
+            
+            // The reflection is strongest at the center of the band and fades to the edges
+            float bandWidth1 = 0.36; // Width of the reflection band (decreased by 50%)
+            float reflectionStrength1 = 1.0 - smoothstep(0.0, bandWidth1, distanceFromBand1);
+            
+            // Second reflection pass that follows a bit behind the first
+            // Only start second reflection when first is partway through (at 30% of animation)
+            float secondReflectionDelay = 0.3;
+            float reflectionY2 = 0.0;
+            float reflectionStrength2 = 0.0;
+            
+            if (reflectionProgress > secondReflectionDelay) {
+                // Calculate delayed progress for second reflection
+                float delayedProgress = (reflectionProgress - secondReflectionDelay) / (1.0 - secondReflectionDelay);
+                
+                // Position the second reflection band
+                reflectionY2 = 0.8 - delayedProgress * 1.6;
+                
+                // Calculate distance from this band
+                float distanceFromBand2 = abs(vFinalPosition.y - reflectionY2);
+                
+                // Second band is thinner for a more refined look
+                float bandWidth2 = 0.225; // Decreased by 50%
+                
+                // Calculate strength of second reflection
+                reflectionStrength2 = 1.0 - smoothstep(0.0, bandWidth2, distanceFromBand2);
+                
+                // Make second reflection more subtle
+                reflectionStrength2 *= 0.7;
+            }
+            
+            // Combine both reflection strengths (with second being weaker)
+            float combinedStrength = reflectionStrength1 + reflectionStrength2;
+            
+            // Apply reflection only to particles that are part of the X shape
+            float isPartOfX = smoothstep(0.5, 0.7, uProgress); // Fully 1.0 at 70% progress
+            combinedStrength *= isPartOfX;
+            
+            // Create a sharper, more focused highlight
+            combinedStrength = pow(combinedStrength, 1.2);
+            
+            // Limit the max strength to avoid over-brightening
+            combinedStrength = min(combinedStrength, 1.0);
+            
+            // Add white highlight but preserve some of the original color
+            finalColor = mix(finalColor, vec3(1.0), combinedStrength);
+            
+            // Also boost brightness for alpha calculations
+            brightness += combinedStrength;
+        }
+        
         // Control opacity based on blending mode and color brightness
         // Brighter colors (like white) get higher opacity
         // Lower opacity for additive blending (starting state)
