@@ -54,6 +54,15 @@ let section2EndPosition = 0; // Position where section 2 ends
 // Background gradient element reference
 let backgroundGradient = null;
 
+function isMobile() {
+  console.log('mobile', window.innerWidth)
+  return window.innerWidth < 1000;
+}
+if(isMobile()){
+  waveOffsetZ = 0.7
+  waveOffsetX = 0.4
+}
+
 // This technique allows a JavaScript file to read its own query parameters
 function getScriptParams() {
   const currentScript = Array.from(document.getElementsByTagName('script')).map(d => d.src).find(d => d.includes('bumbeishvili'))
@@ -786,7 +795,7 @@ loader.load("https://bumbeishvili.github.io/three-webgl-fivr-particle-marv-halb-
  */
 function calculatePointSize() {
   // Base size for a reference width of 1920px
-  const baseSize = 0.026;
+  const baseSize = (isMobile() ? 0.5 : 1) * 0.026;
   const referenceWidth = 1920;
 
   // Scale factor that increases size on smaller screens and decreases on larger screens
@@ -1015,7 +1024,13 @@ function initParticles() {
   particles.geometry.setIndex(null);
 
   // Add a slight scale adjustment to make the X shape more distinctive
-  particles.scale.set(1.1, 1.1, 1.1);
+  if (isMobile()) {
+    particles.scale.set(0.8, 0.8, 0.8);
+    console.log("mobile")
+  } else {
+    particles.scale.set(1.1, 1.1, 1.1);
+    console.log("not mobile")
+  }
 
   // Set renderOrder to ensure proper transparency handling
   particles.renderOrder = 0;
@@ -1174,18 +1189,23 @@ function animate() {
     const baseY = 0.2;
     const baseZ = 3.5;
 
-    // Create subtle movement (adjust these values to change sensitivity)
-    const offsetX = mouseX * 0.15;
-    const offsetY = -mouseY * 0.10;
+    // Only apply mouse-based movement on non-mobile devices
+    if (!isMobile()) {
+      // Create subtle movement (adjust these values to change sensitivity)
+      const offsetX = mouseX * 0.15;
+      const offsetY = -mouseY * 0.10;
 
-    // Apply to camera position
-    camera.position.x = baseX + offsetX;
-    camera.position.y = baseY + offsetY;
+      // Apply to camera position
+      camera.position.x = baseX + offsetX;
+      camera.position.y = baseY + offsetY;
+    } else {
+      // On mobile, use fixed camera position
+      camera.position.x = baseX;
+      camera.position.y = baseY;
+    }
 
     // Keep looking at the center
     camera.lookAt(0, 0, 0);
-
-
   }
 
   // Handle fadeout animation if we've reached that threshold
